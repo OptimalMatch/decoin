@@ -41,7 +41,7 @@ jobs:
         black --check src/ tests/
         # Flake8 linting
         flake8 src/ tests/ --max-line-length=100 --ignore=E203,W503
-        # Type checking 
+        # Type checking  
         mypy src/ --ignore-missing-imports
       continue-on-error: true
     
