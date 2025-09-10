@@ -20,7 +20,9 @@
       "Bash(mv:*)",
       "Bash(docker build:*)",
       "Bash(. ../venv/bin/activate)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
