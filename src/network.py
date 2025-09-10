@@ -104,7 +104,7 @@ class P2PNode:
         asyncio.create_task(self.peer_discovery())
         asyncio.create_task(self.heartbeat())
         
-    async def handle_connection(self, websocket, path):
+    async def handle_connection(self, websocket):
         peer_address = f"{websocket.remote_address[0]}:{websocket.remote_address[1]}"
         peer = PeerConnection(websocket, peer_address)
         self.peers[peer_address] = peer

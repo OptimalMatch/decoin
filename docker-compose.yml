@@ -1,0 +1,110 @@
+version: '3.8'
+
+services:
+  node1:
+    build: .
+    container_name: decoin-node1
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config/docker/node1.json:/app/config/node1.json
+      - node1-data:/app/data
+    environment:
+      - NODE_NAME=node1
+      - NODE_PORT=8080
+    command: python src/node.py --config /app/config/node1.json
+    networks:
+      - decoin-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  node2:
+    build: .
+    container_name: decoin-node2
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./config/docker/node2.json:/app/config/node2.json
+      - node2-data:/app/data
+    environment:
+      - NODE_NAME=node2
+      - NODE_PORT=8081
+    command: python src/node.py --config /app/config/node2.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8081/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  node3:
+    build: .
+    container_name: decoin-node3
+    ports:
+      - "8082:8082"
+    volumes:
+      - ./config/docker/node3.json:/app/config/node3.json
+      - node3-data:/app/data
+    environment:
+      - NODE_NAME=node3
+      - NODE_PORT=8082
+    command: python src/node.py --config /app/config/node3.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+      - node2
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8082/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Add a validator node
+  validator:
+    build: .
+    container_name: decoin-validator
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./config/docker/validator.json:/app/config/validator.json
+      - validator-data:/app/data
+    environment:
+      - NODE_NAME=validator
+      - NODE_PORT=8083
+      - IS_VALIDATOR=true
+    command: python src/node.py --config /app/config/validator.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+      - node2
+      - node3
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8083/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  decoin-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  node1-data:
+  node2-data:
+  node3-data:
+  validator-data:

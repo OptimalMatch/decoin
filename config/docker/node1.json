@@ -1,0 +1,14 @@
+{
+  "host": "0.0.0.0",
+  "port": 8333,
+  "validator_address": "validator1_address",
+  "initial_peers": [
+    "node2:8334",
+    "node3:8335",
+    "validator:8336"
+  ],
+  "mining_enabled": true,
+  "api_enabled": true,
+  "api_port": 8080,
+  "data_dir": "/app/data/node1"
+}
