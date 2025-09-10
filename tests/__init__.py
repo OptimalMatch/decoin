@@ -1,0 +1,3 @@
+"""
+DeCoin Test Suite
+"""

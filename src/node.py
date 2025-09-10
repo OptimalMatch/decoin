@@ -103,132 +103,30 @@ class DeCoinNode:
             await asyncio.sleep(1)
     
     async def start_api(self):
-        from aiohttp import web
+        import sys
+        import os
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        from api_fastapi import DeCoinAPI
+        import uvicorn
+        import asyncio
         
-        app = web.Application()
-        app.router.add_get('/status', self.handle_status)
-        app.router.add_get('/blockchain', self.handle_get_blockchain)
-        app.router.add_post('/transaction', self.handle_new_transaction)
-        app.router.add_get('/balance/{address}', self.handle_get_balance)
-        app.router.add_get('/block/{index}', self.handle_get_block)
-        app.router.add_get('/transaction/{tx_hash}', self.handle_get_transaction)
+        # Create FastAPI app
+        api = DeCoinAPI(self)
         
-        runner = web.AppRunner(app)
-        await runner.setup()
-        site = web.TCPSite(runner, '0.0.0.0', self.config['api_port'])
-        await site.start()
+        # Configure uvicorn server
+        config = uvicorn.Config(
+            app=api.app,
+            host="0.0.0.0",
+            port=self.config['api_port'],
+            log_level="info"
+        )
+        server = uvicorn.Server(config)
+        
+        # Run server in background
+        asyncio.create_task(server.serve())
         print(f"API server started on port {self.config['api_port']}")
-    
-    async def handle_status(self, request):
-        from aiohttp import web
-        
-        status = {
-            'node_id': self.node.node_id,
-            'chain_height': len(self.blockchain.chain),
-            'pending_transactions': len(self.blockchain.pending_transactions),
-            'connected_peers': len(self.node.peers),
-            'is_mining': self.is_mining,
-            'difficulty': self.blockchain.difficulty
-        }
-        return web.json_response(status)
-    
-    async def handle_get_blockchain(self, request):
-        from aiohttp import web
-        
-        return web.json_response(self.blockchain.to_dict())
-    
-    async def handle_new_transaction(self, request):
-        from aiohttp import web
-        
-        try:
-            data = await request.json()
-            
-            tx_type = data.get('type', 'standard')
-            
-            if tx_type == 'standard':
-                tx = self.transaction_builder.create_standard_transaction(
-                    sender=data['sender'],
-                    recipient=data['recipient'],
-                    amount=data['amount'],
-                    fee=data.get('fee', 0.001),
-                    metadata=data.get('metadata', {})
-                )
-            elif tx_type == 'multisig':
-                tx = self.transaction_builder.create_multisig_transaction(
-                    senders=data['senders'],
-                    recipient=data['recipient'],
-                    amount=data['amount'],
-                    required_signatures=data['required_signatures'],
-                    fee=data.get('fee', 0.002)
-                )
-            elif tx_type == 'time_locked':
-                tx = self.transaction_builder.create_time_locked_transaction(
-                    sender=data['sender'],
-                    recipient=data['recipient'],
-                    amount=data['amount'],
-                    unlock_time=data['unlock_time'],
-                    fee=data.get('fee', 0.001)
-                )
-            elif tx_type == 'data_storage':
-                tx = self.transaction_builder.create_data_storage_transaction(
-                    sender=data['sender'],
-                    data=data['data'],
-                    fee=data.get('fee', 0.005)
-                )
-            else:
-                return web.json_response({'error': 'Invalid transaction type'}, status=400)
-            
-            if self.blockchain.add_transaction(tx):
-                await self.node.broadcast_transaction(tx)
-                return web.json_response({'tx_hash': tx.tx_hash, 'status': 'pending'})
-            else:
-                return web.json_response({'error': 'Invalid transaction'}, status=400)
-                
-        except Exception as e:
-            return web.json_response({'error': str(e)}, status=400)
-    
-    async def handle_get_balance(self, request):
-        from aiohttp import web
-        
-        address = request.match_info['address']
-        balance = self.blockchain.get_balance(address)
-        return web.json_response({'address': address, 'balance': balance})
-    
-    async def handle_get_block(self, request):
-        from aiohttp import web
-        
-        try:
-            index = int(request.match_info['index'])
-            if 0 <= index < len(self.blockchain.chain):
-                block = self.blockchain.chain[index]
-                return web.json_response(block.to_dict())
-            else:
-                return web.json_response({'error': 'Block not found'}, status=404)
-        except ValueError:
-            return web.json_response({'error': 'Invalid block index'}, status=400)
-    
-    async def handle_get_transaction(self, request):
-        from aiohttp import web
-        
-        tx_hash = request.match_info['tx_hash']
-        
-        for block in self.blockchain.chain:
-            for tx in block.transactions:
-                if tx.tx_hash == tx_hash:
-                    return web.json_response({
-                        'transaction': tx.to_dict(),
-                        'block_index': block.index,
-                        'confirmations': len(self.blockchain.chain) - block.index
-                    })
-        
-        for tx in self.blockchain.pending_transactions:
-            if tx.tx_hash == tx_hash:
-                return web.json_response({
-                    'transaction': tx.to_dict(),
-                    'status': 'pending'
-                })
-        
-        return web.json_response({'error': 'Transaction not found'}, status=404)
+        print(f"Swagger UI available at http://localhost:{self.config['api_port']}/docs")
+        print(f"ReDoc available at http://localhost:{self.config['api_port']}/redoc")
 
 async def main():
     parser = argparse.ArgumentParser(description='DeCoin Node')

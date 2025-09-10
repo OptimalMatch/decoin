@@ -7,7 +7,12 @@
       "Bash(mkdir:*)",
       "Bash(docker-compose build:*)",
       "Bash(docker compose build:*)",
-      "Bash(docker compose:*)"
+      "Bash(docker compose:*)",
+      "Bash(curl:*)",
+      "Bash(for node in node2 node3 validator)",
+      "Bash(do)",
+      "Bash(docker cp:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []
