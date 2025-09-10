@@ -329,3 +329,27 @@ class DeCoinAPI:
             status=status,
             block_height=block_height
         )
+
+# Add monitoring endpoints
+def add_monitoring_endpoints(app, blockchain=None, node=None):
+    from monitoring import SystemMonitor
+    monitor = SystemMonitor(blockchain, node)
+    
+    @app.get('/monitoring/metrics', tags=['Monitoring'])
+    async def get_metrics():
+        '''Get system metrics'''
+        return monitor.metrics.get_metrics_summary()
+    
+    @app.get('/monitoring/health', tags=['Monitoring'])
+    async def get_health():
+        '''Get health status'''
+        health = monitor.check_health()
+        return health.to_dict()
+    
+    @app.get('/monitoring/dashboard', tags=['Monitoring'])
+    async def get_dashboard():
+        '''Get monitoring dashboard data'''
+        return monitor.get_dashboard_data()
+    
+    return monitor
+

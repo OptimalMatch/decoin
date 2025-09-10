@@ -4,13 +4,14 @@ Unit tests for Consensus mechanisms
 import pytest
 import time
 from unittest.mock import MagicMock, patch
+import sys
+sys.path.insert(0, 'src')
 
 from consensus import (
     ConsensusManager, ProofOfWork, ProofOfStake, 
     HybridConsensus, ValidatorNode
 )
-from blockchain import Blockchain, Block
-from transactions import Transaction, TransactionType
+from blockchain import Blockchain, Block, Transaction, TransactionType
 
 
 class TestProofOfWork:

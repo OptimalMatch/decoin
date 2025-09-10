@@ -1,0 +1,38 @@
+{
+  "transaction_creation": {
+    "total_time": 0.005990545192616992,
+    "average_time": 5.990545192616992e-06,
+    "median_time": 5.2109971875324845e-06,
+    "min_time": 5.009991582483053e-06,
+    "max_time": 0.00025885099603328854,
+    "transactions_per_second": 166929.7147165242
+  },
+  "block_mining": {
+    "total_time": 0.07935709202138241,
+    "average_time": 0.015871418404276482,
+    "median_time": 0.010848488003830425,
+    "min_time": 0.0013105890102451667,
+    "max_time": 0.04373237400432117,
+    "blocks_per_minute": 3780.380459495244
+  },
+  "chain_validation": {
+    "chain_length": 8,
+    "total_transactions": 91,
+    "average_validation_time": 3.1952059653121976e-05,
+    "median_validation_time": 2.8160007786937058e-05,
+    "validations_per_second": 31296.88698807533
+  },
+  "balance_calculation": {
+    "addresses_checked": 100,
+    "average_time": 3.229889698559418e-06,
+    "median_time": 2.706001396290958e-06,
+    "total_time": 0.00032298896985594183,
+    "lookups_per_second": 309608.09604303696
+  },
+  "transaction_types": {
+    "standard": 0.006430690118577331,
+    "multisig": 0.007456840394297615,
+    "timelocked": 0.009365958976559341,
+    "data_storage": 0.010727839689934626
+  }
+}
