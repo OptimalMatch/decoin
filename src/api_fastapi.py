@@ -248,7 +248,7 @@ class DeCoinAPI:
             return {
                 "difficulty": self.blockchain.difficulty,
                 "is_mining": self.node.is_mining,
-                "blocks_mined": sum(1 for b in self.blockchain.chain if b.miner == self.node.validator_address),
+                "blocks_mined": sum(1 for b in self.blockchain.chain if getattr(b, 'validator', None) == getattr(self.node, 'validator_address', None)),
                 "hashrate": 0,  # TODO: Calculate hashrate
                 "next_reward": 50.0
             }

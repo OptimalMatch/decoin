@@ -16,7 +16,11 @@
       "Bash(. venv/bin/activate)",
       "Bash(python -m pytest tests/unit/test_blockchain.py -v --tb=short)",
       "Bash(python -m pytest tests/unit/test_transactions.py -v --tb=short)",
-      "Bash(python:*)"
+      "Bash(python:*)",
+      "Bash(mv:*)",
+      "Bash(docker build:*)",
+      "Bash(. ../venv/bin/activate)",
+      "Bash(git add:*)"
     ],
     "deny": [],
     "ask": []
