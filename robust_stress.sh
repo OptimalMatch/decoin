@@ -108,16 +108,39 @@ monitor_progress() {
         fi
 
         # Count results
-        if [ -f "$RESULTS_FILE" ]; then
-            success=$(grep -c "SUCCESS" "$RESULTS_FILE" 2>/dev/null || echo 0)
-            failed=$(grep -c "FAILED" "$RESULTS_FILE" 2>/dev/null || echo 0)
+        if [ -f "$RESULTS_FILE" ] && [ -s "$RESULTS_FILE" ]; then
+            success=$(grep -c "SUCCESS" "$RESULTS_FILE" 2>/dev/null || echo "0")
+            failed=$(grep -c "FAILED" "$RESULTS_FILE" 2>/dev/null || echo "0")
+            # Ensure they are numbers
+            # Remove any whitespace and ensure numeric
+            success=$(echo "$success" | tr -d ' ')
+            failed=$(echo "$failed" | tr -d ' ')
+            success=${success:-0}
+            failed=${failed:-0}
+
+            # Validate numbers
+            if ! [[ "$success" =~ ^[0-9]+$ ]]; then
+                success=0
+            fi
+            if ! [[ "$failed" =~ ^[0-9]+$ ]]; then
+                failed=0
+            fi
+
             total=$((success + failed))
 
-            if [ $total -gt 0 ]; then
+            if [ "$total" -gt 0 ]; then
                 rate=$((success * 100 / total))
-                tps=$((total / (elapsed + 1)))
+                if [ "$elapsed" -gt 0 ]; then
+                    tps=$((total / elapsed))
+                else
+                    tps=0
+                fi
                 echo -ne "\r${GREEN}Progress:${NC} Time: ${elapsed}s/$duration | Sent: $total | Success: $success | Failed: $failed | Rate: ${rate}% | TPS: $tps    "
+            else
+                echo -ne "\r${GREEN}Progress:${NC} Time: ${elapsed}s/$duration | Starting...                    "
             fi
+        else
+            echo -ne "\r${GREEN}Progress:${NC} Time: ${elapsed}s/$duration | Waiting for results...                    "
         fi
 
         sleep 1
@@ -204,13 +227,32 @@ main() {
     echo -e "${CYAN}═══════════════════════════════════════════════════════════════${NC}"
 
     if [ -f "$RESULTS_FILE" ]; then
-        success=$(grep -c "SUCCESS" "$RESULTS_FILE" 2>/dev/null || echo 0)
-        failed=$(grep -c "FAILED" "$RESULTS_FILE" 2>/dev/null || echo 0)
+        success=$(grep -c "SUCCESS" "$RESULTS_FILE" 2>/dev/null || echo "0")
+        failed=$(grep -c "FAILED" "$RESULTS_FILE" 2>/dev/null || echo "0")
+
+        # Remove any whitespace and ensure numeric
+        success=$(echo "$success" | tr -d ' ')
+        failed=$(echo "$failed" | tr -d ' ')
+        success=${success:-0}
+        failed=${failed:-0}
+
+        # Validate numbers
+        if ! [[ "$success" =~ ^[0-9]+$ ]]; then
+            success=0
+        fi
+        if ! [[ "$failed" =~ ^[0-9]+$ ]]; then
+            failed=0
+        fi
+
         total=$((success + failed))
 
-        if [ $total -gt 0 ]; then
+        if [ "$total" -gt 0 ]; then
             rate=$((success * 100 / total))
-            actual_tps=$((total / TEST_DURATION))
+            if [ "$TEST_DURATION" -gt 0 ]; then
+                actual_tps=$((total / TEST_DURATION))
+            else
+                actual_tps=0
+            fi
 
             echo "Total Transactions: $total"
             echo "Successful: $success"

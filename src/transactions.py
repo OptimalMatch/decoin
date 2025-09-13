@@ -228,10 +228,14 @@ class TransactionValidator:
     def _validate_standard(self, tx: Transaction) -> bool:
         if tx.amount <= 0:
             return False
-        
+
+        # Allow system transactions (faucet, coinbase)
+        if tx.sender == "system":
+            return True
+
         sender_balance = self.blockchain.get_balance(tx.sender)
         total_amount = tx.amount + tx.metadata.get('fee', 0)
-        
+
         return sender_balance >= total_amount
     
     def _validate_multisig(self, tx: Transaction) -> bool:

@@ -127,7 +127,9 @@ class DeCoinNode:
                         if success:
                             if self.blockchain.add_block(block):
                                 print(f"Mined block {block.index}")
+                                print(f"Broadcasting block {block.index} to {len(self.node.peers)} peers")
                                 await self.node.broadcast_block(block)
+                                print(f"Block {block.index} broadcast complete")
 
                                 rewards = self.consensus_manager.consensus.calculate_rewards(block)
                                 print(f"Rewards earned: {rewards}")

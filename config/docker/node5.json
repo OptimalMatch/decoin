@@ -1,7 +1,7 @@
 {
   "host": "0.0.0.0",
   "port": 8338,
-  "validator_address": "validator5_address",
+  "validator_address": null,
   "initial_peers": [
     "node1:8333",
     "node2:8334",
@@ -11,7 +11,7 @@
     "validator:8336",
     "validator2:8340"
   ],
-  "mining_enabled": true,
+  "mining_enabled": false,
   "api_enabled": true,
   "api_port": 11085,
   "data_dir": "/app/data/node5"

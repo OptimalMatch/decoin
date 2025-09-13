@@ -219,6 +219,15 @@ analyze_results() {
 
     local elapsed=$(($(date +%s) - START_TIME))
 
+    # Re-count from temp file for accurate final results
+    if [ -f /tmp/stress_test_results.tmp ]; then
+        SUCCESSFUL_TRANSACTIONS=$(grep -c "SUCCESS" /tmp/stress_test_results.tmp 2>/dev/null || echo 0)
+        FAILED_TRANSACTIONS=$(grep -c "FAILED" /tmp/stress_test_results.tmp 2>/dev/null || echo 0)
+        SUCCESSFUL_TRANSACTIONS=${SUCCESSFUL_TRANSACTIONS:-0}
+        FAILED_TRANSACTIONS=${FAILED_TRANSACTIONS:-0}
+        TOTAL_TRANSACTIONS=$((SUCCESSFUL_TRANSACTIONS + FAILED_TRANSACTIONS))
+    fi
+
     echo "Test Duration: ${elapsed} seconds"
     echo "Total Transactions Attempted: $TOTAL_TRANSACTIONS"
     echo "Successful Transactions: $SUCCESSFUL_TRANSACTIONS"

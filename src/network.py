@@ -238,11 +238,26 @@ class P2PNode:
         block_data = message.data.get('block')
         if not block_data:
             return
-        
+
         block = self.deserialize_block(block_data)
-        if block and self.blockchain.validate_block(block):
-            if self.blockchain.add_block(block):
-                await self.broadcast_block(block, exclude=peer.address)
+        print(f"Received block {block.index if block else 'invalid'} from {peer.address}")
+        if block:
+            # Debug validation
+            expected_index = len(self.blockchain.chain)
+            latest_hash = self.blockchain.get_latest_block().block_hash if self.blockchain.chain else "0"
+            print(f"  Expected index: {expected_index}, got: {block.index}")
+            print(f"  Expected prev_hash: {latest_hash[:8]}..., got: {block.previous_hash[:8]}...")
+
+            if self.blockchain.validate_block(block):
+                if self.blockchain.add_block(block):
+                    print(f"Added block {block.index} to chain")
+                    await self.broadcast_block(block, exclude=peer.address)
+                else:
+                    print(f"Failed to add block {block.index} to chain")
+            else:
+                print(f"Block validation failed for block {block.index}")
+        else:
+            print(f"Failed to deserialize block")
     
     async def handle_new_transaction(self, message: Message, peer: PeerConnection):
         tx_data = message.data.get('transaction')
@@ -250,11 +265,16 @@ class P2PNode:
             return
 
         tx = self.deserialize_transaction(tx_data)
+        print(f"Received transaction {tx.tx_hash[:8] if tx else 'invalid'} from {peer.address}")
         if tx and self.transaction_validator.validate_transaction(tx):
             if self.transaction_pool.add_transaction(tx):
                 self.blockchain.add_transaction(tx)
+                print(f"Added transaction {tx.tx_hash[:8]} to pool and blockchain")
                 await self.broadcast_transaction(tx, exclude=peer.address)
-                print(f"Received transaction {tx.tx_hash[:8]} from {peer.address}")
+            else:
+                print(f"Transaction {tx.tx_hash[:8]} already in pool")
+        else:
+            print(f"Transaction validation failed")
     
     async def handle_get_chain(self, message: Message, peer: PeerConnection):
         chain_data = self.blockchain.to_dict()
@@ -310,10 +330,13 @@ class P2PNode:
             data={'transaction': tx.to_dict()},
             sender=self.node_id
         )
-        
+
+        broadcast_count = 0
         for peer_addr, peer in self.peers.items():
             if peer_addr != exclude and peer.is_alive:
                 await peer.send_message(message)
+                broadcast_count += 1
+        print(f"Broadcast transaction {tx.tx_hash[:8]} to {broadcast_count} peers")
     
     async def sync_blockchain(self, peer: PeerConnection):
         message = Message(

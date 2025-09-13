@@ -138,17 +138,19 @@ class Blockchain:
         self.create_genesis_block()
     
     def create_genesis_block(self) -> None:
+        # Use fixed timestamp for consistent genesis block across all nodes
+        GENESIS_TIMESTAMP = 1700000000.0  # Fixed timestamp: Nov 14, 2023
         genesis_tx = Transaction(
             tx_type=TransactionType.STANDARD,
             sender="genesis",
             recipient="genesis",
             amount=0,
-            timestamp=time.time(),
+            timestamp=GENESIS_TIMESTAMP,
             metadata={"message": "DeCoin Genesis Block"}
         )
         genesis_block = Block(
             index=0,
-            timestamp=time.time(),
+            timestamp=GENESIS_TIMESTAMP,
             transactions=[genesis_tx],
             previous_hash="0"
         )
