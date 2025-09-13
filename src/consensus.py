@@ -33,7 +33,7 @@ class HybridConsensus:
     def register_validator(self, address: str, stake: float) -> bool:
         if stake < self.minimum_stake:
             return False
-        
+
         if address in self.validators:
             self.validators[address].stake += stake
         else:
@@ -41,6 +41,7 @@ class HybridConsensus:
                 address=address,
                 stake=stake
             )
+        print(f"Registered validator {address} with stake {stake}. Total validators: {len(self.validators)}")
         return True
     
     def unregister_validator(self, address: str) -> float:
@@ -53,26 +54,23 @@ class HybridConsensus:
     
     def select_validator(self) -> Optional[str]:
         active_validators = [
-            v for v in self.validators.values() 
-            if v.is_active and time.time() - v.last_validation_time > self.block_time
+            v for v in self.validators.values()
+            if v.is_active
         ]
-        
+
         if not active_validators:
             return None
-        
-        total_weight = sum(v.calculate_weight() for v in active_validators)
-        if total_weight == 0:
-            return None
-        
-        rand = random.uniform(0, total_weight)
-        cumulative_weight = 0
-        
-        for validator in active_validators:
-            cumulative_weight += validator.calculate_weight()
-            if rand <= cumulative_weight:
-                return validator.address
-        
-        return active_validators[-1].address
+
+        # Sort validators by address for consistent ordering across all nodes
+        active_validators.sort(key=lambda v: v.address)
+
+        # Use block height for deterministic round-robin
+        block_height = len(self.blockchain.chain)
+
+        # Simple round-robin based on block height
+        # This ensures fair distribution and consistency across all nodes
+        selected_index = block_height % len(active_validators)
+        return active_validators[selected_index].address
     
     def validate_block_hybrid(self, block: Block, validator_address: str) -> Tuple[bool, float]:
         if validator_address not in self.validators:

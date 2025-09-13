@@ -1,0 +1,20 @@
+{
+  "host": "0.0.0.0",
+  "port": 8340,
+  "validator_address": "validator7_address",
+  "initial_peers": [
+    "node1:8333",
+    "node2:8334",
+    "node3:8335",
+    "node4:8337",
+    "node5:8338",
+    "node6:8339",
+    "validator:8336"
+  ],
+  "mining_enabled": true,
+  "api_enabled": true,
+  "api_port": 11087,
+  "data_dir": "/app/data/validator2",
+  "is_validator": true,
+  "stake_amount": 1500
+}

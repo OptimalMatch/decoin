@@ -30,7 +30,13 @@
       "Bash(do echo -n \"$container: \")",
       "Bash(for i in {1..4})",
       "Bash(for i in {1..6})",
-      "Bash(for i in {1..5})"
+      "Bash(for i in {1..5})",
+      "Bash(for port in 11080 11081 11084 11087)",
+      "Bash(do echo \"=== Node on port $port ===\")",
+      "Bash(for i in {10..25})",
+      "Bash(echo \" $i\")",
+      "Bash(for:*)",
+      "Bash(do echo -n \"Port $port: \")"
     ],
     "deny": [],
     "ask": []

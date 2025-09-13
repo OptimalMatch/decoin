@@ -64,72 +64,78 @@ class DeCoinNode:
         if not self.validator_address:
             print("No validator address configured")
             return
-        
+
         stake = 10000
         success = self.consensus_manager.consensus.register_validator(
-            self.validator_address, 
+            self.validator_address,
             stake
         )
-        
+
         if success:
             print(f"Started mining with validator {self.validator_address}")
             self.is_mining = True
+            # Broadcast validator registration to network
+            asyncio.create_task(self.broadcast_validator_registration(self.validator_address, stake))
             asyncio.create_task(self.mining_loop())
         else:
             print("Failed to register as validator")
+
+    async def broadcast_validator_registration(self, address: str, stake: float):
+        validator_data = {'address': address, 'stake': stake}
+        await self.node.broadcast_validator_registration(validator_data)
     
     async def mining_loop(self):
-        wait_count = 0
+        await asyncio.sleep(5)  # Wait for network sync
         while self.is_mining:
-            # Mine blocks when there are pending transactions or periodically for rewards
+            # Mine blocks when there are pending transactions
             if len(self.blockchain.pending_transactions) >= 1:
-                # Simple round-robin mining based on block height
-                # This ensures all nodes get a chance to mine
+                # Get all validators from consensus
+                validators = list(self.consensus_manager.consensus.validators.keys())
+                if not validators:
+                    await asyncio.sleep(1)
+                    continue
+
+                # Sort validators for consistent ordering across nodes
+                validators.sort()
+
+                # Find our position in validator list
+                if self.validator_address not in validators:
+                    print(f"Validator {self.validator_address} not in validator list")
+                    await asyncio.sleep(1)
+                    continue
+
+                node_index = validators.index(self.validator_address)
+                total_nodes = len(validators)
+
+                # Determine who should mine this block
                 block_height = len(self.blockchain.chain)
-                node_index = {
-                    'validator1_address': 0,
-                    'validator2_address': 1,
-                    'validator3_address': 2,
-                    'validator4_address': 3
-                }.get(self.validator_address, 0)
+                expected_miner_index = block_height % total_nodes
+                expected_miner = validators[expected_miner_index]
 
-                # Each node mines every 4th block (or fewer if there are fewer nodes)
-                total_nodes = 4
-                expected_miner = block_height % total_nodes
-                should_mine = expected_miner == node_index
-
-                # If we've waited too long and have many pending transactions, mine anyway
-                if not should_mine and wait_count > 10 and len(self.blockchain.pending_transactions) > 3:
-                    print(f"Node {node_index}: Taking over mining after waiting (expected miner {expected_miner} seems offline)")
-                    should_mine = True
-                    wait_count = 0
+                should_mine = (expected_miner == self.validator_address)
 
                 if should_mine:
-                    print(f"Node {node_index}: Mining block {block_height} with {len(self.blockchain.pending_transactions)} transactions")
-                    wait_count = 0
+                    print(f"Validator {self.validator_address}: Mining block {block_height} with {len(self.blockchain.pending_transactions)} transactions")
                     block = self.blockchain.create_block(self.validator_address)
-                    
+
                     if block:
                         success = self.consensus_manager.consensus.mine_block_hybrid(
-                            block, 
+                            block,
                             self.validator_address
                         )
-                        
+
                         if success:
                             if self.blockchain.add_block(block):
                                 print(f"Mined block {block.index}")
                                 await self.node.broadcast_block(block)
-                                
+
                                 rewards = self.consensus_manager.consensus.calculate_rewards(block)
                                 print(f"Rewards earned: {rewards}")
                 else:
-                    wait_count += 1
-                    if wait_count % 5 == 0:
-                        print(f"Node {node_index}: Waiting for miner {expected_miner} (wait count: {wait_count})")
-            else:
-                wait_count = 0
+                    # Wait for expected miner
+                    print(f"Validator {self.validator_address}: Waiting for {expected_miner} to mine block {block_height}")
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
     
     async def start_api(self):
         import sys

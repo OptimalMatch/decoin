@@ -3,7 +3,8 @@ services:
     build: .
     container_name: decoin-node1
     ports:
-      - "11080:11080"
+      - "11080:11080"  # API port
+      - "8333:8333"    # P2P port
     volumes:
       - ./config/docker/node1.json:/app/config/node1.json
       - node1-data:/app/data
@@ -24,7 +25,8 @@ services:
     build: .
     container_name: decoin-node2
     ports:
-      - "11081:11081"
+      - "11081:11081"  # API port
+      - "8334:8334"    # P2P port
     volumes:
       - ./config/docker/node2.json:/app/config/node2.json
       - node2-data:/app/data
@@ -47,7 +49,8 @@ services:
     build: .
     container_name: decoin-node3
     ports:
-      - "11082:11082"
+      - "11082:11082"  # API port
+      - "8335:8335"    # P2P port
     volumes:
       - ./config/docker/node3.json:/app/config/node3.json
       - node3-data:/app/data
@@ -72,7 +75,8 @@ services:
     build: .
     container_name: decoin-validator
     ports:
-      - "11083:11083"
+      - "11083:11083"  # API port
+      - "8336:8336"    # P2P port
     volumes:
       - ./config/docker/validator.json:/app/config/validator.json
       - validator-data:/app/data
@@ -94,6 +98,103 @@ services:
       retries: 3
       start_period: 40s
 
+  # Additional nodes for expanded network testing
+  node4:
+    build: .
+    container_name: decoin-node4
+    ports:
+      - "11084:11084"  # API port
+      - "8337:8337"    # P2P port
+    volumes:
+      - ./config/docker/node4.json:/app/config/node4.json
+      - node4-data:/app/data
+    environment:
+      - NODE_NAME=node4
+      - NODE_PORT=11084
+    command: python src/node.py --config /app/config/node4.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11084/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  node5:
+    build: .
+    container_name: decoin-node5
+    ports:
+      - "11085:11085"  # API port
+      - "8338:8338"    # P2P port
+    volumes:
+      - ./config/docker/node5.json:/app/config/node5.json
+      - node5-data:/app/data
+    environment:
+      - NODE_NAME=node5
+      - NODE_PORT=11085
+    command: python src/node.py --config /app/config/node5.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11085/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  node6:
+    build: .
+    container_name: decoin-node6
+    ports:
+      - "11086:11086"  # API port
+      - "8339:8339"    # P2P port
+    volumes:
+      - ./config/docker/node6.json:/app/config/node6.json
+      - node6-data:/app/data
+    environment:
+      - NODE_NAME=node6
+      - NODE_PORT=11086
+    command: python src/node.py --config /app/config/node6.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11086/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  validator2:
+    build: .
+    container_name: decoin-validator2
+    ports:
+      - "11087:11087"  # API port
+      - "8340:8340"    # P2P port
+    volumes:
+      - ./config/docker/validator2.json:/app/config/validator2.json
+      - validator2-data:/app/data
+    environment:
+      - NODE_NAME=validator2
+      - NODE_PORT=11087
+    command: python src/node.py --config /app/config/validator2.json
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11087/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   # Frontend service
   frontend:
     build: ./frontend
@@ -106,7 +207,11 @@ services:
       - node1
       - node2
       - node3
+      - node4
+      - node5
+      - node6
       - validator
+      - validator2
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
       interval: 30s
@@ -125,4 +230,8 @@ volumes:
   node1-data:
   node2-data:
   node3-data:
+  node4-data:
+  node5-data:
+  node6-data:
   validator-data:
+  validator2-data:

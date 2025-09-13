@@ -25,6 +25,9 @@ class MessageType(Enum):
     MEMPOOL = "mempool"
     VERSION = "version"
     VERACK = "verack"
+    REGISTER_VALIDATOR = "register_validator"
+    VALIDATOR_LIST = "validator_list"
+    GET_VALIDATORS = "get_validators"
 
 @dataclass
 class Message:
@@ -135,7 +138,10 @@ class P2PNode:
             MessageType.GET_MEMPOOL: self.handle_get_mempool,
             MessageType.MEMPOOL: self.handle_mempool,
             MessageType.VERSION: self.handle_version,
-            MessageType.VERACK: self.handle_verack
+            MessageType.VERACK: self.handle_verack,
+            MessageType.REGISTER_VALIDATOR: self.handle_register_validator,
+            MessageType.VALIDATOR_LIST: self.handle_validator_list,
+            MessageType.GET_VALIDATORS: self.handle_get_validators
         }
         
         handler = handlers.get(message.type)
@@ -170,6 +176,13 @@ class P2PNode:
     async def handle_verack(self, message: Message, peer: PeerConnection):
         if message.data.get('accepted'):
             print(f"Handshake completed with {peer.address}")
+            # Request validator list from peer
+            get_validators = Message(
+                type=MessageType.GET_VALIDATORS,
+                data={},
+                sender=self.node_id
+            )
+            await peer.send_message(get_validators)
     
     async def handle_ping(self, message: Message, peer: PeerConnection):
         pong = Message(
@@ -235,12 +248,13 @@ class P2PNode:
         tx_data = message.data.get('transaction')
         if not tx_data:
             return
-        
+
         tx = self.deserialize_transaction(tx_data)
         if tx and self.transaction_validator.validate_transaction(tx):
             if self.transaction_pool.add_transaction(tx):
                 self.blockchain.add_transaction(tx)
                 await self.broadcast_transaction(tx, exclude=peer.address)
+                print(f"Received transaction {tx.tx_hash[:8]} from {peer.address}")
     
     async def handle_get_chain(self, message: Message, peer: PeerConnection):
         chain_data = self.blockchain.to_dict()
@@ -351,9 +365,65 @@ class P2PNode:
                     
                     if time.time() - peer.last_seen > 120:
                         peer.is_alive = False
-            
+
             await asyncio.sleep(30)
-    
+
+    async def handle_register_validator(self, message: Message, peer: PeerConnection):
+        validator_data = message.data.get('validator')
+        if not validator_data:
+            return
+
+        address = validator_data.get('address')
+        stake = validator_data.get('stake')
+
+        if address and stake:
+            # Register validator in consensus
+            success = self.consensus_manager.consensus.register_validator(address, stake)
+            if success:
+                print(f"Registered validator {address} from network with stake {stake}")
+                # Broadcast to other peers
+                await self.broadcast_validator_registration(validator_data, exclude=peer.address)
+
+    async def handle_validator_list(self, message: Message, peer: PeerConnection):
+        validators = message.data.get('validators', [])
+
+        for validator_data in validators:
+            address = validator_data.get('address')
+            stake = validator_data.get('stake')
+            if address and stake:
+                # Only register if not already registered
+                if address not in self.consensus_manager.consensus.validators:
+                    self.consensus_manager.consensus.register_validator(address, stake)
+                    print(f"Synced validator {address} with stake {stake}")
+
+    async def handle_get_validators(self, message: Message, peer: PeerConnection):
+        validators = []
+        for address, validator in self.consensus_manager.consensus.validators.items():
+            validators.append({
+                'address': address,
+                'stake': validator.stake,
+                'reputation': validator.reputation,
+                'blocks_validated': validator.blocks_validated
+            })
+
+        response = Message(
+            type=MessageType.VALIDATOR_LIST,
+            data={'validators': validators},
+            sender=self.node_id
+        )
+        await peer.send_message(response)
+
+    async def broadcast_validator_registration(self, validator_data: Dict, exclude: str = None):
+        message = Message(
+            type=MessageType.REGISTER_VALIDATOR,
+            data={'validator': validator_data},
+            sender=self.node_id
+        )
+
+        for peer_addr, peer in self.peers.items():
+            if peer_addr != exclude and peer.is_alive:
+                await peer.send_message(message)
+
     def deserialize_block(self, block_data: Dict) -> Optional[Block]:
         try:
             from blockchain import Block, Transaction, TransactionType

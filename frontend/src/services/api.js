@@ -7,7 +7,11 @@ const NODES = {
   0: { name: 'Node 1', port: 11080, path: '/api' },
   1: { name: 'Node 2', port: 11081, path: '/api2' },
   2: { name: 'Node 3', port: 11082, path: '/api3' },
-  3: { name: 'Validator', port: 11083, path: '/api-validator' },
+  3: { name: 'Node 4', port: 11084, path: '/api4' },
+  4: { name: 'Node 5', port: 11085, path: '/api5' },
+  5: { name: 'Node 6', port: 11086, path: '/api6' },
+  6: { name: 'Validator 1', port: 11083, path: '/api-validator' },
+  7: { name: 'Validator 2', port: 11087, path: '/api-validator2' },
 }
 
 // Create API instance with dynamic base URL

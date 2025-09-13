@@ -7,10 +7,14 @@ import toast from 'react-hot-toast'
 function NodeStatus() {
   const [selectedNode, setSelectedNode] = useState(0)
   const nodes = [
-    { name: 'Node 1', port: 11080 },
-    { name: 'Node 2', port: 11081 },
-    { name: 'Node 3', port: 11082 },
-    { name: 'Validator', port: 11083 },
+    { name: 'Node 1', port: 11080, type: 'node', validator: 'validator1_address' },
+    { name: 'Node 2', port: 11081, type: 'node', validator: 'validator2_address' },
+    { name: 'Node 3', port: 11082, type: 'node', validator: 'validator3_address' },
+    { name: 'Node 4', port: 11084, type: 'node', validator: 'validator4_address' },
+    { name: 'Node 5', port: 11085, type: 'node', validator: 'validator5_address' },
+    { name: 'Node 6', port: 11086, type: 'node', validator: 'validator6_address' },
+    { name: 'Validator 1', port: 11083, type: 'validator', validator: 'primary_validator_address' },
+    { name: 'Validator 2', port: 11087, type: 'validator', validator: 'validator7_address' },
   ]
 
   const { data: status, isLoading, refetch } = useQuery(
@@ -73,13 +77,19 @@ function NodeStatus() {
             <button
               key={index}
               onClick={() => setSelectedNode(index)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-3 py-2 rounded-lg font-medium transition-colors flex items-center gap-1 ${
                 selectedNode === index
                   ? 'bg-primary-600 text-white'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-600'
               }`}
             >
+              {node.type === 'validator' && (
+                <span className="text-yellow-400">⭐</span>
+              )}
               {node.name}
+              <span className="text-xs opacity-60">
+                :{node.port}
+              </span>
             </button>
           ))}
         </div>
@@ -160,6 +170,24 @@ function NodeStatus() {
               <p className="text-sm text-gray-500 dark:text-gray-400">Node ID</p>
               <p className="font-mono text-sm text-gray-900 dark:text-white">
                 {status?.node_id || 'Unknown'}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Node Type</p>
+              <p className="text-gray-900 dark:text-white">
+                {nodes[selectedNode]?.type === 'validator' ? (
+                  <span className="badge badge-primary">⭐ Validator</span>
+                ) : (
+                  <span className="badge badge-info">Mining Node</span>
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-sm text-gray-500 dark:text-gray-400">Validator Address</p>
+              <p className="font-mono text-xs text-gray-900 dark:text-white break-all">
+                {nodes[selectedNode]?.validator || 'None'}
               </p>
             </div>
 
@@ -300,7 +328,7 @@ function NodeStatus() {
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div>
                 <p className="text-gray-500 dark:text-gray-400">Total Nodes</p>
-                <p className="font-semibold text-gray-900 dark:text-white">4</p>
+                <p className="font-semibold text-gray-900 dark:text-white">8</p>
               </div>
               <div>
                 <p className="text-gray-500 dark:text-gray-400">Active Miners</p>
