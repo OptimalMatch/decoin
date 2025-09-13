@@ -75,12 +75,12 @@ create_transaction() {
     local recipient=$2
     local tx_num=$3
 
-    local response=$(curl -s -X POST "http://localhost:$port/faucet/$recipient" 2>/dev/null)
+    local response=$(curl -s -m 2 -X POST "http://localhost:$port/faucet/$recipient" 2>/dev/null)
 
-    if echo "$response" | grep -q "success.*true"; then
-        local tx_id=$(echo "$response" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['transaction_id'][:8])" 2>/dev/null || echo "unknown")
+    if [ -n "$response" ] && echo "$response" | grep -q "success.*true"; then
         return 0
     else
+        echo "Failed transaction to port $port: $response" >> "$TEST_LOG"
         return 1
     fi
 }
@@ -92,19 +92,18 @@ run_transaction_batch() {
     local node_index=$((batch_num % ${#NODES[@]}))
     local port=${NODES[$node_index]}
 
-    print_status "User $user_id: Sending batch $batch_num to ${NODE_NAMES[$node_index]}" "$BLUE"
+    echo "[$(date +'%H:%M:%S')] User $user_id: Sending batch $batch_num to port $port" >> "$TEST_LOG"
 
     for i in $(seq 1 $BATCH_SIZE); do
         local recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}"
 
         if create_transaction "$port" "$recipient" "$i"; then
-            ((SUCCESSFUL_TRANSACTIONS++))
+            echo "$user_id:$batch_num:$i:SUCCESS" >> /tmp/stress_test_results.tmp
             echo -n "."
         else
-            ((FAILED_TRANSACTIONS++))
+            echo "$user_id:$batch_num:$i:FAILED" >> /tmp/stress_test_results.tmp
             echo -n "x"
         fi
-        ((TOTAL_TRANSACTIONS++))
 
         # Small delay between transactions
         sleep 0.1
@@ -125,12 +124,19 @@ monitor_network() {
             printf "%-12s (:%5d): %s\n" "$name" "$port" "$stats"
         done
 
+        # Count transactions from temp file
+        if [ -f /tmp/stress_test_results.tmp ]; then
+            SUCCESSFUL_TRANSACTIONS=$(grep -c "SUCCESS" /tmp/stress_test_results.tmp 2>/dev/null || echo "0")
+            FAILED_TRANSACTIONS=$(grep -c "FAILED" /tmp/stress_test_results.tmp 2>/dev/null || echo "0")
+            TOTAL_TRANSACTIONS=$((SUCCESSFUL_TRANSACTIONS + FAILED_TRANSACTIONS))
+        fi
+
         echo ""
         print_status "=== TEST STATISTICS ===" "$YELLOW"
         local current_time=$(date +%s)
         local elapsed=$((current_time - START_TIME))
         local tps=0
-        if [ $elapsed -gt 0 ]; then
+        if [ $elapsed -gt 0 ] && [ $SUCCESSFUL_TRANSACTIONS -gt 0 ]; then
             tps=$((SUCCESSFUL_TRANSACTIONS / elapsed))
         fi
 
@@ -138,7 +144,12 @@ monitor_network() {
         echo "Total Transactions: $TOTAL_TRANSACTIONS"
         echo "Successful: $SUCCESSFUL_TRANSACTIONS"
         echo "Failed: $FAILED_TRANSACTIONS"
-        echo "Success Rate: $(echo "scale=2; $SUCCESSFUL_TRANSACTIONS * 100 / $TOTAL_TRANSACTIONS" | bc 2>/dev/null || echo "0")%"
+        if [ $TOTAL_TRANSACTIONS -gt 0 ]; then
+            local success_rate=$((SUCCESSFUL_TRANSACTIONS * 100 / TOTAL_TRANSACTIONS))
+            echo "Success Rate: ${success_rate}%"
+        else
+            echo "Success Rate: 0%"
+        fi
         echo "TPS (Transactions/Second): $tps"
 
         sleep 5
@@ -154,6 +165,9 @@ monitor_network() {
 run_stress_test() {
     print_status "Starting stress test for $TEST_DURATION seconds..." "$GREEN"
 
+    # Clean up temp file
+    rm -f /tmp/stress_test_results.tmp
+
     # Start monitoring in background
     monitor_network &
     MONITOR_PID=$!
@@ -161,10 +175,10 @@ run_stress_test() {
     # Run concurrent users
     for user in $(seq 1 $CONCURRENT_USERS); do
         (
-            local batch=1
+            batch=1
             while true; do
-                local current_time=$(date +%s)
-                local elapsed=$((current_time - START_TIME))
+                current_time=$(date +%s)
+                elapsed=$((current_time - START_TIME))
 
                 if [ $elapsed -ge $TEST_DURATION ]; then
                     break
@@ -172,7 +186,7 @@ run_stress_test() {
 
                 run_transaction_batch $batch $user
                 sleep $BATCH_DELAY
-                ((batch++))
+                batch=$((batch + 1))
             done
         ) &
     done
@@ -284,6 +298,9 @@ main() {
     echo "  - Batch Delay: $BATCH_DELAY seconds"
     echo "  - Log File: $TEST_LOG"
     echo ""
+
+    # Clean up previous temp files
+    rm -f /tmp/stress_test_results.tmp
 
     # Check if Docker containers are running
     print_status "Checking Docker containers..." "$BLUE"

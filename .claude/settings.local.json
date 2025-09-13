@@ -38,7 +38,8 @@
       "Bash(for:*)",
       "Bash(do echo -n \"Port $port: \")",
       "Bash(./quick_test.sh:*)",
-      "Bash(bash:*)"
+      "Bash(bash:*)",
+      "Bash(timeout:*)"
     ],
     "deny": [],
     "ask": []
