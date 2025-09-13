@@ -27,7 +27,10 @@
       "Bash(docker:*)",
       "Bash(./start-services.sh:*)",
       "Bash(for container in decoin-node1 decoin-node2 decoin-node3 decoin-validator decoin-frontend)",
-      "Bash(do echo -n \"$container: \")"
+      "Bash(do echo -n \"$container: \")",
+      "Bash(for i in {1..4})",
+      "Bash(for i in {1..6})",
+      "Bash(for i in {1..5})"
     ],
     "deny": [],
     "ask": []

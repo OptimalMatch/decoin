@@ -184,10 +184,33 @@ class DeCoinAPI:
         async def get_mempool():
             """Get all pending transactions in the mempool"""
             return [
-                self._tx_to_response(tx, "pending") 
+                self._tx_to_response(tx, "pending")
                 for tx in self.blockchain.pending_transactions
             ]
-        
+
+        @self.app.get("/transactions/{address}", response_model=List[TransactionResponse], tags=["Transactions"])
+        async def get_transaction_history(
+            address: str = Path(..., description="Wallet address")
+        ):
+            """Get transaction history for an address"""
+            transactions = []
+
+            # Get confirmed transactions from blockchain
+            for block in self.blockchain.chain:
+                for tx in block.transactions:
+                    if tx.sender == address or tx.recipient == address:
+                        transactions.append(self._tx_to_response(tx, "confirmed", block.index))
+
+            # Get pending transactions
+            for tx in self.blockchain.pending_transactions:
+                if tx.sender == address or tx.recipient == address:
+                    transactions.append(self._tx_to_response(tx, "pending"))
+
+            # Sort by timestamp (most recent first)
+            transactions.sort(key=lambda x: x.timestamp, reverse=True)
+
+            return transactions
+
         @self.app.post("/faucet/{address}", response_model=SuccessResponse, tags=["Wallet"])
         async def faucet(
             address: str = Path(..., description="Wallet address to fund")
