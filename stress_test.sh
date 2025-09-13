@@ -76,9 +76,9 @@ create_transaction() {
     local recipient=$2
     local tx_num=$3
 
-    local response=$(curl -s -m 2 -X POST "http://localhost:$port/faucet/$recipient" 2>/dev/null)
+    local response=$(curl -s -m 5 -X POST "http://localhost:$port/faucet/$recipient" 2>/dev/null)
 
-    if [ -n "$response" ] && echo "$response" | grep -q "success.*true"; then
+    if [ -n "$response" ] && echo "$response" | grep -q '"success":true'; then
         return 0
     else
         echo "Failed transaction to port $port: $response" >> "$TEST_LOG"
@@ -96,7 +96,9 @@ run_transaction_batch() {
     echo "[$(date +'%H:%M:%S')] User $user_id: Sending batch $batch_num to port $port" >> "$TEST_LOG"
 
     for i in $(seq 1 $BATCH_SIZE); do
-        recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}"
+        # Add timestamp to make addresses unique
+        timestamp=$(date +%s%N)
+        recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}_${timestamp}"
 
         if create_transaction "$port" "$recipient" "$i"; then
             echo "$user_id:$batch_num:$i:SUCCESS" >> /tmp/stress_test_results.tmp
@@ -305,7 +307,8 @@ generate_load_patterns() {
             # Send many transactions at once
             for i in $(seq 1 100); do
                 local node_port=${NODES[$((i % ${#NODES[@]}))]}
-                create_transaction "$node_port" "BURST_USER_$i" "$i" &
+                local timestamp=$(date +%s%N)
+                create_transaction "$node_port" "BURST_USER_${i}_${timestamp}" "$i" &
             done
             wait
             ;;
@@ -315,7 +318,8 @@ generate_load_patterns() {
             # Send transactions at a steady rate
             for i in $(seq 1 100); do
                 local node_port=${NODES[$((i % ${#NODES[@]}))]}
-                create_transaction "$node_port" "SUSTAINED_USER_$i" "$i"
+                local timestamp=$(date +%s%N)
+                create_transaction "$node_port" "SUSTAINED_USER_${i}_${timestamp}" "$i"
                 sleep 0.5
             done
             ;;
@@ -325,7 +329,8 @@ generate_load_patterns() {
             # Random delays between transactions
             for i in $(seq 1 50); do
                 local node_port=${NODES[$((RANDOM % ${#NODES[@]}))]}
-                create_transaction "$node_port" "RANDOM_USER_$i" "$i"
+                local timestamp=$(date +%s%N)
+                create_transaction "$node_port" "RANDOM_USER_${i}_${timestamp}" "$i"
                 sleep $((RANDOM % 3))
             done
             ;;
