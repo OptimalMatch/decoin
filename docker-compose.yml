@@ -3,18 +3,18 @@ services:
     build: .
     container_name: decoin-node1
     ports:
-      - "10080:10080"
+      - "11080:11080"
     volumes:
       - ./config/docker/node1.json:/app/config/node1.json
       - node1-data:/app/data
     environment:
       - NODE_NAME=node1
-      - NODE_PORT=10080
+      - NODE_PORT=11080
     command: python src/node.py --config /app/config/node1.json
     networks:
       - decoin-network
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10080/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11080/status')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -24,20 +24,20 @@ services:
     build: .
     container_name: decoin-node2
     ports:
-      - "10081:10081"
+      - "11081:11081"
     volumes:
       - ./config/docker/node2.json:/app/config/node2.json
       - node2-data:/app/data
     environment:
       - NODE_NAME=node2
-      - NODE_PORT=10081
+      - NODE_PORT=11081
     command: python src/node.py --config /app/config/node2.json
     networks:
       - decoin-network
     depends_on:
       - node1
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10081/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11081/status')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -47,13 +47,13 @@ services:
     build: .
     container_name: decoin-node3
     ports:
-      - "10082:10082"
+      - "11082:11082"
     volumes:
       - ./config/docker/node3.json:/app/config/node3.json
       - node3-data:/app/data
     environment:
       - NODE_NAME=node3
-      - NODE_PORT=10082
+      - NODE_PORT=11082
     command: python src/node.py --config /app/config/node3.json
     networks:
       - decoin-network
@@ -61,7 +61,7 @@ services:
       - node1
       - node2
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10082/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11082/status')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -72,13 +72,13 @@ services:
     build: .
     container_name: decoin-validator
     ports:
-      - "10083:10083"
+      - "11083:11083"
     volumes:
       - ./config/docker/validator.json:/app/config/validator.json
       - validator-data:/app/data
     environment:
       - NODE_NAME=validator
-      - NODE_PORT=10083
+      - NODE_PORT=11083
       - IS_VALIDATOR=true
     command: python src/node.py --config /app/config/validator.json
     networks:
@@ -88,11 +88,31 @@ services:
       - node2
       - node3
     healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:10083/status')"]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:11083/status')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Frontend service
+  frontend:
+    build: ./frontend
+    container_name: decoin-frontend
+    ports:
+      - "11000:80"
+    networks:
+      - decoin-network
+    depends_on:
+      - node1
+      - node2
+      - node3
+      - validator
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
 networks:
   decoin-network:

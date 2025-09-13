@@ -80,7 +80,8 @@ class DeCoinNode:
     
     async def mining_loop(self):
         while self.is_mining:
-            if len(self.blockchain.pending_transactions) >= 5:
+            # Mine blocks when there are pending transactions or periodically for rewards
+            if len(self.blockchain.pending_transactions) >= 1:
                 selected = self.consensus_manager.consensus.select_validator()
                 
                 if selected == self.validator_address:

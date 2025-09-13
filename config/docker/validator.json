@@ -9,7 +9,7 @@
   ],
   "mining_enabled": true,
   "api_enabled": true,
-  "api_port": 10083,
+  "api_port": 11083,
   "data_dir": "/app/data/validator",
   "is_validator": true,
   "stake_amount": 1000

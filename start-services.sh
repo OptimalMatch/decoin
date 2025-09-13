@@ -53,7 +53,7 @@ check_docker_compose() {
 
 # Function to check port availability
 check_ports() {
-    local ports=(10080 10081 10082 10083)
+    local ports=(11000 11080 11081 11082 11083)
     local all_clear=true
 
     for port in "${ports[@]}"; do
@@ -147,10 +147,10 @@ check_all_services() {
 
     local all_healthy=true
 
-    wait_for_service "Node 1" 10080 || all_healthy=false
-    wait_for_service "Node 2" 10081 || all_healthy=false
-    wait_for_service "Node 3" 10082 || all_healthy=false
-    wait_for_service "Validator" 10083 || all_healthy=false
+    wait_for_service "Node 1" 11080 || all_healthy=false
+    wait_for_service "Node 2" 11081 || all_healthy=false
+    wait_for_service "Node 3" 11082 || all_healthy=false
+    wait_for_service "Validator" 11083 || all_healthy=false
 
     if [ "$all_healthy" = true ]; then
         print_success "All services are healthy and running!"
@@ -168,15 +168,18 @@ show_service_info() {
     echo "                 DeCoin Services Running                    "
     echo "════════════════════════════════════════════════════════════"
     echo
+    echo "  🌐 Frontend:"
+    echo "     • Web UI:     http://localhost:11000"
+    echo
     echo "  📡 API Endpoints:"
-    echo "     • Node 1:    http://localhost:10080"
-    echo "     • Node 2:    http://localhost:10081"
-    echo "     • Node 3:    http://localhost:10082"
-    echo "     • Validator: http://localhost:10083"
+    echo "     • Node 1:     http://localhost:11080"
+    echo "     • Node 2:     http://localhost:11081"
+    echo "     • Node 3:     http://localhost:11082"
+    echo "     • Validator:  http://localhost:11083"
     echo
     echo "  📚 Documentation:"
-    echo "     • Swagger UI: http://localhost:10080/docs"
-    echo "     • Redoc:      http://localhost:10080/redoc"
+    echo "     • Swagger UI: http://localhost:11080/docs"
+    echo "     • Redoc:      http://localhost:11080/redoc"
     echo
     echo "  🔧 Useful Commands:"
     echo "     • View logs:       docker-compose logs -f"

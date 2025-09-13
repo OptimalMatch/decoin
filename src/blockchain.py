@@ -1,6 +1,7 @@
 import hashlib
 import json
 import time
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass, field
 from enum import Enum
@@ -167,33 +168,57 @@ class Blockchain:
     def validate_transaction(self, transaction: Transaction) -> bool:
         if transaction.amount < 0:
             return False
-        
+
         if len(json.dumps(transaction.metadata)) > 1024:
             return False
-        
+
+        # Check sender balance (skip for system transactions like mining rewards)
+        if transaction.sender not in ['genesis', 'mining_reward', 'system', 'coinbase']:
+            sender_balance = self.get_balance(transaction.sender)
+            total_required = transaction.amount + transaction.metadata.get('fee', 0.001)
+            if sender_balance < total_required:
+                print(f"Insufficient balance: {transaction.sender} has {sender_balance}, needs {total_required}")
+                return False
+
         if transaction.tx_type == TransactionType.TIME_LOCKED:
             if 'unlock_time' not in transaction.metadata:
                 return False
             if transaction.metadata['unlock_time'] <= time.time():
                 return False
-        
+
         return True
     
     def create_block(self, validator: str, stake_weight: float = 0.7) -> Block:
-        if not self.pending_transactions:
-            return None
-        
+        # Create coinbase transaction (mining reward)
+        block_height = len(self.chain)
+        halvings = block_height // 100000  # Halving every 100,000 blocks
+        base_reward = 50
+        block_reward = base_reward / (2 ** halvings)
+
+        coinbase_tx = Transaction(
+            sender="system",
+            recipient=validator,
+            amount=block_reward,
+            timestamp=datetime.now().isoformat(),
+            tx_type=TransactionType.STANDARD,
+            metadata={"type": "coinbase", "block_height": block_height}
+        )
+
+        # Include pending transactions plus the coinbase transaction
+        # Always create a block even if there are no pending transactions (coinbase only)
+        transactions = [coinbase_tx] + self.pending_transactions[:99]
+
         block = Block(
-            index=len(self.chain),
+            index=block_height,
             timestamp=time.time(),
-            transactions=self.pending_transactions[:100],
+            transactions=transactions,
             previous_hash=self.get_latest_block().block_hash,
             validator=validator,
             stake_weight=stake_weight,
             work_weight=1 - stake_weight,
             difficulty=self.difficulty
         )
-        
+
         return block
     
     def add_block(self, block: Block) -> bool:
@@ -242,14 +267,22 @@ class Blockchain:
         
         return True
     
-    def get_balance(self, address: str) -> float:
+    def get_balance(self, address: str, include_pending: bool = True) -> float:
         balance = 0
+        # Calculate confirmed balance from blockchain
         for block in self.chain:
             for tx in block.transactions:
                 if tx.sender == address:
-                    balance -= tx.amount
+                    balance -= (tx.amount + tx.metadata.get('fee', 0))
                 if tx.recipient == address:
                     balance += tx.amount
+
+        # Subtract pending outgoing transactions to prevent double-spending
+        if include_pending:
+            for tx in self.pending_transactions:
+                if tx.sender == address:
+                    balance -= (tx.amount + tx.metadata.get('fee', 0))
+
         return balance
     
     def to_dict(self) -> Dict[str, Any]:

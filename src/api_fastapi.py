@@ -188,6 +188,37 @@ class DeCoinAPI:
                 for tx in self.blockchain.pending_transactions
             ]
         
+        @self.app.post("/faucet/{address}", response_model=SuccessResponse, tags=["Wallet"])
+        async def faucet(
+            address: str = Path(..., description="Wallet address to fund")
+        ):
+            """Get free test coins from faucet (testnet only)"""
+            # Check if address has already received faucet funds recently
+            current_balance = self.blockchain.get_balance(address)
+            if current_balance > 100:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Address already has sufficient balance"
+                )
+
+            # Create faucet transaction
+            faucet_tx = self.transaction_builder.create_standard_transaction(
+                sender="system",
+                recipient=address,
+                amount=100.0,  # Give 100 test coins
+                fee=0,
+                metadata={"type": "faucet", "timestamp": datetime.now().isoformat()}
+            )
+
+            if self.blockchain.add_transaction(faucet_tx):
+                await self.node.node.broadcast_transaction(faucet_tx)
+                return SuccessResponse(
+                    message="Faucet funds sent successfully",
+                    data={"transaction_id": faucet_tx.tx_hash, "amount": 100.0}
+                )
+            else:
+                raise HTTPException(status_code=500, detail="Failed to send faucet funds")
+
         @self.app.get("/balance/{address}", response_model=WalletBalance, tags=["Wallet"])
         async def get_balance(
             address: str = Path(..., description="Wallet address")
@@ -323,7 +354,7 @@ class DeCoinAPI:
             sender=tx.sender,
             recipient=tx.recipient,
             amount=tx.amount,
-            timestamp=datetime.fromtimestamp(tx.timestamp),
+            timestamp=tx.timestamp if isinstance(tx.timestamp, datetime) else datetime.fromisoformat(tx.timestamp) if isinstance(tx.timestamp, str) else datetime.fromtimestamp(tx.timestamp),
             transaction_type=tx.tx_type.value if hasattr(tx.tx_type, 'value') else str(tx.tx_type),
             metadata=tx.metadata,
             status=status,
