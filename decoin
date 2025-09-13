@@ -1,0 +1,349 @@
+#!/bin/bash
+
+# DeCoin Management CLI
+# Main entry point for managing DeCoin services
+
+set -e
+
+# Script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+MAGENTA='\033[0;35m'
+NC='\033[0m' # No Color
+
+# Version
+VERSION="1.0.0"
+
+# Function to show usage
+show_usage() {
+    cat << EOF
+╔════════════════════════════════════════════════════════════╗
+║                    DeCoin CLI v${VERSION}                      ║
+╚════════════════════════════════════════════════════════════╝
+
+Blockchain network management tool for DeCoin
+
+USAGE:
+    $(basename "$0") <command> [options]
+
+COMMANDS:
+    start           Start all DeCoin services
+    stop            Stop all DeCoin services
+    restart         Restart all services
+    status          Show current service status
+    monitor         Monitor services in real-time
+    logs            View service logs
+    exec            Execute command in a container
+    test            Run the test suite
+    benchmark       Run performance benchmarks
+    clean           Clean up all containers and volumes
+    info            Display system information
+    help            Show this help message
+
+EXAMPLES:
+    $(basename "$0") start              # Start all services
+    $(basename "$0") monitor             # Monitor services
+    $(basename "$0") logs node1          # View node1 logs
+    $(basename "$0") exec node1 bash     # Shell into node1
+    $(basename "$0") test unit           # Run unit tests
+
+For more information on a specific command, use:
+    $(basename "$0") <command> --help
+
+EOF
+}
+
+# Function to start services
+cmd_start() {
+    "$SCRIPT_DIR/start-services.sh" "$@"
+}
+
+# Function to stop services
+cmd_stop() {
+    "$SCRIPT_DIR/stop-services.sh" "$@"
+}
+
+# Function to restart services
+cmd_restart() {
+    echo -e "${BLUE}Restarting DeCoin services...${NC}"
+    "$SCRIPT_DIR/stop-services.sh"
+    sleep 2
+    "$SCRIPT_DIR/start-services.sh"
+}
+
+# Function to show status
+cmd_status() {
+    if [ "${1:-}" == "--help" ]; then
+        echo "Show status of DeCoin services"
+        echo
+        echo "Usage: $(basename "$0") status [--json]"
+        echo
+        echo "Options:"
+        echo "  --json    Output in JSON format"
+        return
+    fi
+
+    if [ "${1:-}" == "--json" ]; then
+        # JSON output for scripting
+        docker-compose ps --format json 2>/dev/null || docker compose ps --format json 2>/dev/null
+    else
+        # Human-readable output
+        echo -e "${CYAN}DeCoin Service Status${NC}"
+        echo "════════════════════════════════════════════"
+        docker-compose ps 2>/dev/null || docker compose ps 2>/dev/null
+
+        echo
+        echo -e "${CYAN}Quick Health Check:${NC}"
+        for node_info in "node1:10080" "node2:10081" "node3:10082" "validator:10083"; do
+            IFS=':' read -r node port <<< "$node_info"
+            if curl -s -f "http://localhost:${port}/health" >/dev/null 2>&1; then
+                echo -e "  ${GREEN}✓${NC} $node (port $port) is healthy"
+            else
+                echo -e "  ${RED}✗${NC} $node (port $port) is not responding"
+            fi
+        done
+    fi
+}
+
+# Function to monitor services
+cmd_monitor() {
+    "$SCRIPT_DIR/monitor-services.sh" "$@"
+}
+
+# Function to view logs
+cmd_logs() {
+    if [ "${1:-}" == "--help" ] || [ -z "${1:-}" ]; then
+        echo "View logs from DeCoin services"
+        echo
+        echo "Usage: $(basename "$0") logs <service> [options]"
+        echo
+        echo "Services:"
+        echo "  all         All services"
+        echo "  node1       Node 1"
+        echo "  node2       Node 2"
+        echo "  node3       Node 3"
+        echo "  validator   Validator node"
+        echo
+        echo "Options:"
+        echo "  -f, --follow    Follow log output"
+        echo "  --tail <n>      Number of lines to show from the end"
+        return
+    fi
+
+    local service="${1}"
+    shift
+
+    case "$service" in
+        all)
+            docker-compose logs "$@" 2>/dev/null || docker compose logs "$@" 2>/dev/null
+            ;;
+        node1|node2|node3|validator)
+            docker-compose logs "$service" "$@" 2>/dev/null || docker compose logs "$service" "$@" 2>/dev/null
+            ;;
+        *)
+            echo -e "${RED}Unknown service: $service${NC}"
+            echo "Use '$(basename "$0") logs --help' for available services"
+            exit 1
+            ;;
+    esac
+}
+
+# Function to execute commands in containers
+cmd_exec() {
+    if [ "${1:-}" == "--help" ] || [ -z "${1:-}" ]; then
+        echo "Execute command in a DeCoin container"
+        echo
+        echo "Usage: $(basename "$0") exec <service> <command> [args...]"
+        echo
+        echo "Services:"
+        echo "  node1       Node 1"
+        echo "  node2       Node 2"
+        echo "  node3       Node 3"
+        echo "  validator   Validator node"
+        echo
+        echo "Examples:"
+        echo "  $(basename "$0") exec node1 bash"
+        echo "  $(basename "$0") exec node1 python -c 'print(\"Hello\")'"
+        return
+    fi
+
+    local service="${1}"
+    shift
+
+    docker-compose exec "$service" "$@" 2>/dev/null || docker compose exec "$service" "$@" 2>/dev/null
+}
+
+# Function to run tests
+cmd_test() {
+    if [ "${1:-}" == "--help" ]; then
+        echo "Run DeCoin test suite"
+        echo
+        echo "Usage: $(basename "$0") test [type]"
+        echo
+        echo "Test types:"
+        echo "  all         Run all tests (default)"
+        echo "  unit        Run unit tests only"
+        echo "  integration Run integration tests only"
+        echo "  coverage    Run tests with coverage report"
+        return
+    fi
+
+    "$SCRIPT_DIR/run_tests.sh" "${1:-all}"
+}
+
+# Function to run benchmarks
+cmd_benchmark() {
+    if [ "${1:-}" == "--help" ]; then
+        echo "Run DeCoin performance benchmarks"
+        echo
+        echo "Usage: $(basename "$0") benchmark [options]"
+        echo
+        echo "Options:"
+        echo "  --stress    Run stress test"
+        echo "  --quick     Run quick benchmark"
+        return
+    fi
+
+    echo -e "${BLUE}Running performance benchmarks...${NC}"
+
+    if [ "${1:-}" == "--stress" ]; then
+        python "$SCRIPT_DIR/tests/performance/stress_test.py" --url http://localhost:10080
+    else
+        python "$SCRIPT_DIR/src/benchmark.py"
+    fi
+}
+
+# Function to clean up
+cmd_clean() {
+    if [ "${1:-}" == "--help" ]; then
+        echo "Clean up DeCoin containers and data"
+        echo
+        echo "Usage: $(basename "$0") clean [--all]"
+        echo
+        echo "Options:"
+        echo "  --all    Also remove Docker images and prune system"
+        return
+    fi
+
+    echo -e "${YELLOW}Cleaning up DeCoin services...${NC}"
+
+    # Stop and remove containers, networks, volumes
+    docker-compose down -v 2>/dev/null || docker compose down -v 2>/dev/null
+
+    if [ "${1:-}" == "--all" ]; then
+        echo -e "${YELLOW}Removing Docker images...${NC}"
+        docker-compose down --rmi all 2>/dev/null || docker compose down --rmi all 2>/dev/null
+
+        echo -e "${YELLOW}Pruning Docker system...${NC}"
+        docker system prune -f
+    fi
+
+    echo -e "${GREEN}Cleanup complete${NC}"
+}
+
+# Function to show system information
+cmd_info() {
+    echo -e "${CYAN}╔════════════════════════════════════════════════════════════╗${NC}"
+    echo -e "${CYAN}║                    DeCoin System Info                      ║${NC}"
+    echo -e "${CYAN}╚════════════════════════════════════════════════════════════╝${NC}"
+    echo
+
+    echo -e "${BLUE}Version:${NC} $VERSION"
+    echo -e "${BLUE}Directory:${NC} $SCRIPT_DIR"
+    echo
+
+    echo -e "${BLUE}Docker:${NC}"
+    docker --version 2>/dev/null || echo "  Docker not found"
+    docker-compose --version 2>/dev/null || docker compose version 2>/dev/null || echo "  Docker Compose not found"
+
+    echo
+    echo -e "${BLUE}Python:${NC}"
+    python3 --version 2>/dev/null || echo "  Python not found"
+
+    echo
+    echo -e "${BLUE}Service Endpoints:${NC}"
+    echo "  • Node 1:    http://localhost:10080"
+    echo "  • Node 2:    http://localhost:10081"
+    echo "  • Node 3:    http://localhost:10082"
+    echo "  • Validator: http://localhost:10083"
+    echo "  • Swagger:   http://localhost:10080/docs"
+
+    echo
+    echo -e "${BLUE}Configuration Files:${NC}"
+    echo "  • Docker:    $SCRIPT_DIR/docker-compose.yml"
+    echo "  • Node 1:    $SCRIPT_DIR/config/docker/node1.json"
+    echo "  • Node 2:    $SCRIPT_DIR/config/docker/node2.json"
+    echo "  • Node 3:    $SCRIPT_DIR/config/docker/node3.json"
+    echo "  • Validator: $SCRIPT_DIR/config/docker/validator.json"
+}
+
+# Main function
+main() {
+    cd "$SCRIPT_DIR"
+
+    # Check if no arguments provided
+    if [ $# -eq 0 ]; then
+        show_usage
+        exit 0
+    fi
+
+    # Parse command
+    command="${1}"
+    shift
+
+    case "$command" in
+        start)
+            cmd_start "$@"
+            ;;
+        stop)
+            cmd_stop "$@"
+            ;;
+        restart)
+            cmd_restart "$@"
+            ;;
+        status)
+            cmd_status "$@"
+            ;;
+        monitor)
+            cmd_monitor "$@"
+            ;;
+        logs)
+            cmd_logs "$@"
+            ;;
+        exec)
+            cmd_exec "$@"
+            ;;
+        test)
+            cmd_test "$@"
+            ;;
+        benchmark)
+            cmd_benchmark "$@"
+            ;;
+        clean)
+            cmd_clean "$@"
+            ;;
+        info)
+            cmd_info "$@"
+            ;;
+        help|--help|-h)
+            show_usage
+            ;;
+        version|--version|-v)
+            echo "DeCoin CLI v${VERSION}"
+            ;;
+        *)
+            echo -e "${RED}Unknown command: $command${NC}"
+            echo "Use '$(basename "$0") help' for available commands"
+            exit 1
+            ;;
+    esac
+}
+
+# Run main function
+main "$@"
