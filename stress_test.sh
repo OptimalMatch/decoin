@@ -26,6 +26,7 @@ SUCCESSFUL_TRANSACTIONS=0
 FAILED_TRANSACTIONS=0
 START_TIME=$(date +%s)
 TEST_LOG="stress_test_$(date +%Y%m%d_%H%M%S).log"
+declare -a PIDS
 
 # Function to print colored output
 print_status() {
@@ -87,15 +88,15 @@ create_transaction() {
 
 # Function to run concurrent transaction batches
 run_transaction_batch() {
-    local batch_num=$1
-    local user_id=$2
-    local node_index=$((batch_num % ${#NODES[@]}))
-    local port=${NODES[$node_index]}
+    batch_num=$1
+    user_id=$2
+    node_index=$((batch_num % ${#NODES[@]}))
+    port=${NODES[$node_index]}
 
     echo "[$(date +'%H:%M:%S')] User $user_id: Sending batch $batch_num to port $port" >> "$TEST_LOG"
 
     for i in $(seq 1 $BATCH_SIZE); do
-        local recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}"
+        recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}"
 
         if create_transaction "$port" "$recipient" "$i"; then
             echo "$user_id:$batch_num:$i:SUCCESS" >> /tmp/stress_test_results.tmp
@@ -126,9 +127,16 @@ monitor_network() {
 
         # Count transactions from temp file
         if [ -f /tmp/stress_test_results.tmp ]; then
-            SUCCESSFUL_TRANSACTIONS=$(grep -c "SUCCESS" /tmp/stress_test_results.tmp 2>/dev/null || echo "0")
-            FAILED_TRANSACTIONS=$(grep -c "FAILED" /tmp/stress_test_results.tmp 2>/dev/null || echo "0")
+            SUCCESSFUL_TRANSACTIONS=$(grep -c "SUCCESS" /tmp/stress_test_results.tmp 2>/dev/null || echo 0)
+            FAILED_TRANSACTIONS=$(grep -c "FAILED" /tmp/stress_test_results.tmp 2>/dev/null || echo 0)
+            # Ensure values are not empty
+            SUCCESSFUL_TRANSACTIONS=${SUCCESSFUL_TRANSACTIONS:-0}
+            FAILED_TRANSACTIONS=${FAILED_TRANSACTIONS:-0}
             TOTAL_TRANSACTIONS=$((SUCCESSFUL_TRANSACTIONS + FAILED_TRANSACTIONS))
+        else
+            SUCCESSFUL_TRANSACTIONS=0
+            FAILED_TRANSACTIONS=0
+            TOTAL_TRANSACTIONS=0
         fi
 
         echo ""
@@ -164,9 +172,11 @@ monitor_network() {
 # Function to perform stress test
 run_stress_test() {
     print_status "Starting stress test for $TEST_DURATION seconds..." "$GREEN"
+    print_status "Creating $CONCURRENT_USERS concurrent users..." "$BLUE"
 
     # Clean up temp file
     rm -f /tmp/stress_test_results.tmp
+    touch /tmp/stress_test_results.tmp
 
     # Start monitoring in background
     monitor_network &
@@ -174,6 +184,7 @@ run_stress_test() {
 
     # Run concurrent users
     for user in $(seq 1 $CONCURRENT_USERS); do
+        echo "Starting user $user..." >> "$TEST_LOG"
         (
             batch=1
             while true; do
@@ -181,6 +192,7 @@ run_stress_test() {
                 elapsed=$((current_time - START_TIME))
 
                 if [ $elapsed -ge $TEST_DURATION ]; then
+                    echo "User $user stopping after $elapsed seconds" >> "$TEST_LOG"
                     break
                 fi
 
@@ -189,10 +201,13 @@ run_stress_test() {
                 batch=$((batch + 1))
             done
         ) &
+        PIDS+=($!)
     done
 
     # Wait for all background jobs
-    wait
+    for pid in ${PIDS[@]}; do
+        wait $pid
+    done
 
     # Kill monitor
     kill $MONITOR_PID 2>/dev/null || true

@@ -39,7 +39,8 @@
       "Bash(do echo -n \"Port $port: \")",
       "Bash(./quick_test.sh:*)",
       "Bash(bash:*)",
-      "Bash(timeout:*)"
+      "Bash(timeout:*)",
+      "Bash(./robust_stress.sh:*)"
     ],
     "deny": [],
     "ask": []
