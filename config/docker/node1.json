@@ -9,6 +9,6 @@
   ],
   "mining_enabled": true,
   "api_enabled": true,
-  "api_port": 8080,
+  "api_port": 10080,
   "data_dir": "/app/data/node1"
 }

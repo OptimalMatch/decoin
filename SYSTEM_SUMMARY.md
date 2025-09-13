@@ -103,10 +103,10 @@ decoin/
 ## 🐳 Docker Deployment
 
 The system runs a 4-node network:
-- **Node 1** (Port 8080): Regular node
-- **Node 2** (Port 8081): Regular node  
-- **Node 3** (Port 8082): Regular node
-- **Validator** (Port 8083): Validator node
+- **Node 1** (Port 10080): Regular node
+- **Node 2** (Port 10081): Regular node
+- **Node 3** (Port 10082): Regular node
+- **Validator** (Port 10083): Validator node
 
 ### Quick Start
 ```bash
@@ -188,7 +188,7 @@ make clean         # Clean temporary files
 {
   "node_id": "node1",
   "host": "0.0.0.0",
-  "port": 8080,
+  "port": 10080,
   "peers": ["ws://node2:6001"],
   "mining": true,
   "validator_stake": 1000
@@ -225,8 +225,8 @@ make clean         # Clean temporary files
 The system is currently running with:
 - 4 active nodes
 - All health checks passing
-- API accessible on ports 8080-8083
-- Swagger UI available at http://localhost:8080/docs
+- API accessible on ports 10080-10083
+- Swagger UI available at http://localhost:10080/docs
 
 ## 🎯 Future Enhancements
 

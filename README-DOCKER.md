@@ -33,10 +33,10 @@ This document describes how to run DeCoin using Docker and Docker Compose.
 
 The Docker Compose setup creates a 4-node DeCoin network:
 
-- **node1**: Regular node on port 8080
-- **node2**: Regular node on port 8081  
-- **node3**: Regular node on port 8082
-- **validator**: Validator node on port 8083
+- **node1**: Regular node on port 10080
+- **node2**: Regular node on port 10081
+- **node3**: Regular node on port 10082
+- **validator**: Validator node on port 10083
 
 All nodes are connected via a Docker bridge network and can communicate with each other.
 
@@ -44,22 +44,22 @@ All nodes are connected via a Docker bridge network and can communicate with eac
 
 Once running, the nodes expose REST APIs:
 
-- Node 1: http://localhost:8080
-- Node 2: http://localhost:8081
-- Node 3: http://localhost:8082
-- Validator: http://localhost:8083
+- Node 1: http://localhost:10080
+- Node 2: http://localhost:10081
+- Node 3: http://localhost:10082
+- Validator: http://localhost:10083
 
 ### Example API Calls
 
 ```bash
 # Check node status
-curl http://localhost:8080/status
+curl http://localhost:10080/status
 
 # Get blockchain info
-curl http://localhost:8080/blockchain
+curl http://localhost:10080/blockchain
 
 # Submit transaction
-curl -X POST http://localhost:8080/transaction \
+curl -X POST http://localhost:10080/transaction \
   -H "Content-Type: application/json" \
   -d '{"from": "alice", "to": "bob", "amount": 10}'
 ```
@@ -133,7 +133,7 @@ docker-compose build --no-cache
 ```
 
 ### Port conflicts
-If ports 8080-8083 are in use, modify the port mappings in `docker-compose.yml`.
+If ports 10080-10083 are in use, modify the port mappings in `docker-compose.yml`.
 
 ### Network issues
 ```bash

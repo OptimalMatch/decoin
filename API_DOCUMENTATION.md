@@ -2,7 +2,7 @@
 
 ## Base URL
 ```
-http://localhost:8080
+http://localhost:10080
 ```
 
 ## Endpoints
@@ -179,7 +179,7 @@ Connect to `ws://localhost:8333` for P2P communication.
 
 ### Submit a Transaction
 ```bash
-curl -X POST http://localhost:8080/transaction \
+curl -X POST http://localhost:10080/transaction \
   -H "Content-Type: application/json" \
   -d '{
     "type": "standard",
@@ -192,15 +192,15 @@ curl -X POST http://localhost:8080/transaction \
 
 ### Check Balance
 ```bash
-curl http://localhost:8080/balance/alice
+curl http://localhost:10080/balance/alice
 ```
 
 ### Get Block
 ```bash
-curl http://localhost:8080/block/0
+curl http://localhost:10080/block/0
 ```
 
 ### Get Node Status
 ```bash
-curl http://localhost:8080/status
+curl http://localhost:10080/status
 ```

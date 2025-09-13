@@ -73,11 +73,11 @@ docker-up:
 	@echo "Waiting for services to start..."
 	@sleep 10
 	@echo "Services available at:"
-	@echo "  Node 1: http://localhost:8080"
-	@echo "  Node 2: http://localhost:8081"
-	@echo "  Node 3: http://localhost:8082"
-	@echo "  Validator: http://localhost:8083"
-	@echo "  Swagger UI: http://localhost:8080/docs"
+	@echo "  Node 1: http://localhost:10080"
+	@echo "  Node 2: http://localhost:10081"
+	@echo "  Node 3: http://localhost:10082"
+	@echo "  Validator: http://localhost:10083"
+	@echo "  Swagger UI: http://localhost:10080/docs"
 
 docker-down:
 	docker compose down

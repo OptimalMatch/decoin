@@ -79,7 +79,7 @@ docker compose up -d
 ### Run a Single Node
 
 ```bash
-python src/node.py --node-id node1 --port 8080 --ws-port 6001
+python src/node.py --node-id node1 --port 10080 --ws-port 6001
 ```
 
 ### Run Multiple Nodes (Docker)
@@ -101,10 +101,10 @@ docker compose down
 ### Access the API
 
 Once running, you can access:
-- **API Documentation**: http://localhost:8080/docs
-- **Node Status**: http://localhost:8080/status
-- **Blockchain Explorer**: http://localhost:8080/blockchain
-- **Health Check**: http://localhost:8080/health
+- **API Documentation**: http://localhost:10080/docs
+- **Node Status**: http://localhost:10080/status
+- **Blockchain Explorer**: http://localhost:10080/blockchain
+- **Health Check**: http://localhost:10080/health
 
 ## 📖 API Endpoints
 
@@ -127,7 +127,7 @@ Once running, you can access:
 
 Submit a standard transaction:
 ```bash
-curl -X POST http://localhost:8080/transaction \
+curl -X POST http://localhost:10080/transaction \
   -H "Content-Type: application/json" \
   -d '{
     "sender": "alice",
@@ -141,7 +141,7 @@ curl -X POST http://localhost:8080/transaction \
 
 Start mining:
 ```bash
-curl -X POST http://localhost:8080/mine \
+curl -X POST http://localhost:10080/mine \
   -H "Content-Type: application/json" \
   -d '{"action": "start"}'
 ```
@@ -193,10 +193,10 @@ The Docker Compose setup creates a 4-node network:
 
 | Node | API Port | WebSocket Port | Type |
 |------|----------|----------------|------|
-| node1 | 8080 | 6001 | Regular Node |
-| node2 | 8081 | 6002 | Regular Node |
-| node3 | 8082 | 6003 | Regular Node |
-| validator | 8083 | 6004 | Validator Node |
+| node1 | 10080 | 6001 | Regular Node |
+| node2 | 10081 | 6002 | Regular Node |
+| node3 | 10082 | 6003 | Regular Node |
+| validator | 10083 | 6004 | Validator Node |
 
 ### Custom Configuration
 
@@ -215,7 +215,7 @@ Create a `config/node.json` file:
 {
   "node_id": "node1",
   "host": "0.0.0.0",
-  "port": 8080,
+  "port": 10080,
   "ws_port": 6001,
   "peers": ["ws://node2:6002"],
   "mining": true,
@@ -233,7 +233,7 @@ Create a `config/node.json` file:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `DECOIN_NODE_ID` | Node identifier | `node1` |
-| `DECOIN_PORT` | API port | `8080` |
+| `DECOIN_PORT` | API port | `10080` |
 | `DECOIN_WS_PORT` | WebSocket port | `6001` |
 | `DECOIN_PEERS` | Comma-separated peer list | `""` |
 | `DECOIN_MINING` | Enable mining | `true` |
