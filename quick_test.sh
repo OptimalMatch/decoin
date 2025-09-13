@@ -32,8 +32,8 @@ fi
 echo -e "${YELLOW}Checking node health...${NC}"
 healthy_nodes=0
 for port in "${NODES[@]}"; do
-    if curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
-        ((healthy_nodes++))
+    if curl -s -m 2 "http://localhost:$port/health" > /dev/null 2>&1; then
+        healthy_nodes=$((healthy_nodes + 1))
         echo -e "${GREEN}✓${NC} Node on port $port is healthy"
     else
         echo "✗ Node on port $port is not responding"
@@ -60,9 +60,10 @@ done
 # Create some test transactions
 echo ""
 echo -e "${YELLOW}Creating test transactions...${NC}"
-for i in {1..20}; do
-    port=${NODES[$((i % ${#NODES[@]}))]}
-    curl -X POST "http://localhost:$port/faucet/QUICKTEST_$i" 2>/dev/null > /dev/null && echo -n "."
+for i in $(seq 1 20); do
+    port_index=$((i % ${#NODES[@]}))
+    port=${NODES[$port_index]}
+    curl -s -m 2 -X POST "http://localhost:$port/faucet/QUICKTEST_$i" > /dev/null 2>&1 && echo -n "."
 done
 echo " Done!"
 
