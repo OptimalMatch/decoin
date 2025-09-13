@@ -36,7 +36,9 @@
       "Bash(for i in {10..25})",
       "Bash(echo \" $i\")",
       "Bash(for:*)",
-      "Bash(do echo -n \"Port $port: \")"
+      "Bash(do echo -n \"Port $port: \")",
+      "Bash(./quick_test.sh:*)",
+      "Bash(bash:*)"
     ],
     "deny": [],
     "ask": []

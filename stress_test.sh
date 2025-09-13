@@ -1,0 +1,335 @@
+#!/bin/bash
+
+# DeCoin Blockchain Network Stress Test Script
+# This script performs comprehensive stress testing on the 8-node blockchain network
+
+set -e
+
+# Configuration
+NODES=(11080 11081 11082 11084 11085 11086 11083 11087)
+NODE_NAMES=("Node1" "Node2" "Node3" "Node4" "Node5" "Node6" "Validator1" "Validator2")
+TEST_DURATION=300  # Test duration in seconds (5 minutes)
+BATCH_SIZE=10      # Number of transactions per batch
+BATCH_DELAY=2      # Delay between batches in seconds
+CONCURRENT_USERS=5 # Number of concurrent test users
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Test results
+TOTAL_TRANSACTIONS=0
+SUCCESSFUL_TRANSACTIONS=0
+FAILED_TRANSACTIONS=0
+START_TIME=$(date +%s)
+TEST_LOG="stress_test_$(date +%Y%m%d_%H%M%S).log"
+
+# Function to print colored output
+print_status() {
+    echo -e "${2}[$(date +'%H:%M:%S')] ${1}${NC}" | tee -a "$TEST_LOG"
+}
+
+# Function to check if all nodes are healthy
+check_nodes_health() {
+    print_status "Checking node health..." "$BLUE"
+    local all_healthy=true
+
+    for i in "${!NODES[@]}"; do
+        local port=${NODES[$i]}
+        local name=${NODE_NAMES[$i]}
+
+        if curl -s "http://localhost:$port/health" > /dev/null 2>&1; then
+            print_status "✓ $name (port $port) is healthy" "$GREEN"
+        else
+            print_status "✗ $name (port $port) is not responding" "$RED"
+            all_healthy=false
+        fi
+    done
+
+    if [ "$all_healthy" = false ]; then
+        print_status "Not all nodes are healthy. Exiting..." "$RED"
+        exit 1
+    fi
+}
+
+# Function to get blockchain statistics
+get_blockchain_stats() {
+    local port=$1
+    local stats=$(curl -s "http://localhost:$port/blockchain" 2>/dev/null)
+
+    if [ -n "$stats" ]; then
+        local blocks=$(echo "$stats" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d['blocks']))" 2>/dev/null || echo "0")
+        local mempool=$(curl -s "http://localhost:$port/mempool" 2>/dev/null | python3 -c "import json,sys; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
+        echo "Blocks: $blocks, Mempool: $mempool"
+    else
+        echo "Unable to fetch stats"
+    fi
+}
+
+# Function to create a transaction
+create_transaction() {
+    local port=$1
+    local recipient=$2
+    local tx_num=$3
+
+    local response=$(curl -s -X POST "http://localhost:$port/faucet/$recipient" 2>/dev/null)
+
+    if echo "$response" | grep -q "success.*true"; then
+        local tx_id=$(echo "$response" | python3 -c "import json,sys; print(json.load(sys.stdin)['data']['transaction_id'][:8])" 2>/dev/null || echo "unknown")
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Function to run concurrent transaction batches
+run_transaction_batch() {
+    local batch_num=$1
+    local user_id=$2
+    local node_index=$((batch_num % ${#NODES[@]}))
+    local port=${NODES[$node_index]}
+
+    print_status "User $user_id: Sending batch $batch_num to ${NODE_NAMES[$node_index]}" "$BLUE"
+
+    for i in $(seq 1 $BATCH_SIZE); do
+        local recipient="USER_${user_id}_BATCH_${batch_num}_TX_${i}"
+
+        if create_transaction "$port" "$recipient" "$i"; then
+            ((SUCCESSFUL_TRANSACTIONS++))
+            echo -n "."
+        else
+            ((FAILED_TRANSACTIONS++))
+            echo -n "x"
+        fi
+        ((TOTAL_TRANSACTIONS++))
+
+        # Small delay between transactions
+        sleep 0.1
+    done
+    echo ""
+}
+
+# Function to monitor network performance
+monitor_network() {
+    while true; do
+        clear
+        print_status "=== NETWORK STATUS ===" "$YELLOW"
+
+        for i in "${!NODES[@]}"; do
+            local port=${NODES[$i]}
+            local name=${NODE_NAMES[$i]}
+            local stats=$(get_blockchain_stats "$port")
+            printf "%-12s (:%5d): %s\n" "$name" "$port" "$stats"
+        done
+
+        echo ""
+        print_status "=== TEST STATISTICS ===" "$YELLOW"
+        local current_time=$(date +%s)
+        local elapsed=$((current_time - START_TIME))
+        local tps=0
+        if [ $elapsed -gt 0 ]; then
+            tps=$((SUCCESSFUL_TRANSACTIONS / elapsed))
+        fi
+
+        echo "Test Duration: ${elapsed}s / ${TEST_DURATION}s"
+        echo "Total Transactions: $TOTAL_TRANSACTIONS"
+        echo "Successful: $SUCCESSFUL_TRANSACTIONS"
+        echo "Failed: $FAILED_TRANSACTIONS"
+        echo "Success Rate: $(echo "scale=2; $SUCCESSFUL_TRANSACTIONS * 100 / $TOTAL_TRANSACTIONS" | bc 2>/dev/null || echo "0")%"
+        echo "TPS (Transactions/Second): $tps"
+
+        sleep 5
+
+        # Check if test duration exceeded
+        if [ $elapsed -ge $TEST_DURATION ]; then
+            break
+        fi
+    done
+}
+
+# Function to perform stress test
+run_stress_test() {
+    print_status "Starting stress test for $TEST_DURATION seconds..." "$GREEN"
+
+    # Start monitoring in background
+    monitor_network &
+    MONITOR_PID=$!
+
+    # Run concurrent users
+    for user in $(seq 1 $CONCURRENT_USERS); do
+        (
+            local batch=1
+            while true; do
+                local current_time=$(date +%s)
+                local elapsed=$((current_time - START_TIME))
+
+                if [ $elapsed -ge $TEST_DURATION ]; then
+                    break
+                fi
+
+                run_transaction_batch $batch $user
+                sleep $BATCH_DELAY
+                ((batch++))
+            done
+        ) &
+    done
+
+    # Wait for all background jobs
+    wait
+
+    # Kill monitor
+    kill $MONITOR_PID 2>/dev/null || true
+}
+
+# Function to analyze results
+analyze_results() {
+    print_status "\n=== FINAL RESULTS ===" "$GREEN"
+
+    local elapsed=$(($(date +%s) - START_TIME))
+
+    echo "Test Duration: ${elapsed} seconds"
+    echo "Total Transactions Attempted: $TOTAL_TRANSACTIONS"
+    echo "Successful Transactions: $SUCCESSFUL_TRANSACTIONS"
+    echo "Failed Transactions: $FAILED_TRANSACTIONS"
+
+    if [ $TOTAL_TRANSACTIONS -gt 0 ]; then
+        local success_rate=$(echo "scale=2; $SUCCESSFUL_TRANSACTIONS * 100 / $TOTAL_TRANSACTIONS" | bc)
+        local tps=$(echo "scale=2; $SUCCESSFUL_TRANSACTIONS / $elapsed" | bc)
+
+        echo "Success Rate: ${success_rate}%"
+        echo "Average TPS: $tps"
+    fi
+
+    # Get final blockchain state
+    print_status "\n=== FINAL BLOCKCHAIN STATE ===" "$BLUE"
+    for i in "${!NODES[@]}"; do
+        local port=${NODES[$i]}
+        local name=${NODE_NAMES[$i]}
+        local stats=$(get_blockchain_stats "$port")
+        printf "%-12s: %s\n" "$name" "$stats"
+    done
+
+    # Check for consensus
+    print_status "\n=== CONSENSUS CHECK ===" "$BLUE"
+    local first_height=""
+    local consensus=true
+
+    for i in "${!NODES[@]}"; do
+        local port=${NODES[$i]}
+        local height=$(curl -s "http://localhost:$port/blockchain" 2>/dev/null | \
+            python3 -c "import json,sys; print(len(json.load(sys.stdin)['blocks']))" 2>/dev/null || echo "0")
+
+        if [ -z "$first_height" ]; then
+            first_height=$height
+        elif [ "$height" != "$first_height" ]; then
+            consensus=false
+        fi
+    done
+
+    if [ "$consensus" = true ]; then
+        print_status "✓ All nodes have reached consensus (height: $first_height)" "$GREEN"
+    else
+        print_status "✗ Nodes have different blockchain heights - consensus issue!" "$RED"
+    fi
+}
+
+# Function to generate load patterns
+generate_load_patterns() {
+    local pattern=$1
+
+    case $pattern in
+        "burst")
+            print_status "Generating BURST load pattern..." "$YELLOW"
+            # Send many transactions at once
+            for i in $(seq 1 100); do
+                local node_port=${NODES[$((i % ${#NODES[@]}))]}
+                create_transaction "$node_port" "BURST_USER_$i" "$i" &
+            done
+            wait
+            ;;
+
+        "sustained")
+            print_status "Generating SUSTAINED load pattern..." "$YELLOW"
+            # Send transactions at a steady rate
+            for i in $(seq 1 100); do
+                local node_port=${NODES[$((i % ${#NODES[@]}))]}
+                create_transaction "$node_port" "SUSTAINED_USER_$i" "$i"
+                sleep 0.5
+            done
+            ;;
+
+        "random")
+            print_status "Generating RANDOM load pattern..." "$YELLOW"
+            # Random delays between transactions
+            for i in $(seq 1 50); do
+                local node_port=${NODES[$((RANDOM % ${#NODES[@]}))]}
+                create_transaction "$node_port" "RANDOM_USER_$i" "$i"
+                sleep $((RANDOM % 3))
+            done
+            ;;
+    esac
+}
+
+# Main execution
+main() {
+    print_status "=== DeCoin Blockchain Stress Test ===" "$GREEN"
+    print_status "Test Configuration:" "$BLUE"
+    echo "  - Network Size: ${#NODES[@]} nodes"
+    echo "  - Test Duration: $TEST_DURATION seconds"
+    echo "  - Concurrent Users: $CONCURRENT_USERS"
+    echo "  - Batch Size: $BATCH_SIZE transactions"
+    echo "  - Batch Delay: $BATCH_DELAY seconds"
+    echo "  - Log File: $TEST_LOG"
+    echo ""
+
+    # Check if Docker containers are running
+    print_status "Checking Docker containers..." "$BLUE"
+    if ! docker ps | grep -q decoin; then
+        print_status "DeCoin containers are not running. Please start them first." "$RED"
+        exit 1
+    fi
+
+    # Check node health
+    check_nodes_health
+
+    # Get initial state
+    print_status "\n=== INITIAL BLOCKCHAIN STATE ===" "$BLUE"
+    for i in "${!NODES[@]}"; do
+        local port=${NODES[$i]}
+        local name=${NODE_NAMES[$i]}
+        local stats=$(get_blockchain_stats "$port")
+        printf "%-12s: %s\n" "$name" "$stats"
+    done
+
+    # Parse command line arguments
+    if [ "$1" == "pattern" ]; then
+        # Run specific load patterns
+        generate_load_patterns "${2:-burst}"
+        sleep 10
+        generate_load_patterns "sustained"
+        sleep 10
+        generate_load_patterns "random"
+    else
+        # Run standard stress test
+        run_stress_test
+    fi
+
+    # Wait for transactions to be mined
+    print_status "\nWaiting for transactions to be mined..." "$YELLOW"
+    sleep 30
+
+    # Analyze results
+    analyze_results
+
+    print_status "\n=== STRESS TEST COMPLETED ===" "$GREEN"
+    print_status "Results saved to: $TEST_LOG" "$BLUE"
+}
+
+# Handle script termination
+trap 'print_status "\nTest interrupted by user" "$RED"; analyze_results; exit 1' INT TERM
+
+# Run main function
+main "$@"
