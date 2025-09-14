@@ -12,8 +12,8 @@ function Dashboard() {
   )
 
   const { data: blockchain, isLoading: blockchainLoading } = useQuery(
-    'recentBlocks',
-    () => blockchainAPI.getRecentBlocks(100),
+    'blockchain',
+    blockchainAPI.getBlockchain,
     { refetchInterval: 10000 }
   )
 

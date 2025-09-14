@@ -51,7 +51,8 @@
       "Bash(do echo -n \"Port $port genesis: \")",
       "Bash(./simple_stress.sh:*)",
       "Bash(awk:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

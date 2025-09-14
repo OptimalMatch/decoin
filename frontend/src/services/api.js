@@ -60,7 +60,14 @@ api.interceptors.response.use(
 
 // Blockchain endpoints
 export const blockchainAPI = {
-  getBlockchain: (start = 0, limit = 100) => api.get('/blockchain', { params: { start, limit } }),
+  getBlockchain: (start = 0, limit = 100) => {
+    // If no parameters provided, fetch the most recent blocks
+    if (start === 0 && limit === 100) {
+      // Fetch all blocks to get the latest ones
+      return api.get('/blockchain', { params: { start: 0, limit: 1000 } })
+    }
+    return api.get('/blockchain', { params: { start, limit } })
+  },
   getBlock: (index) => api.get(`/block/${index}`),
   getLatestBlock: () => api.get('/blockchain/latest'),
   getBlockByHash: (hash) => api.get(`/block/hash/${hash}`),
@@ -70,6 +77,7 @@ export const blockchainAPI = {
     const chainHeight = status.data.chain_height
     // Calculate start index to get the most recent blocks
     const start = Math.max(0, chainHeight - count)
+    console.log(`Fetching blocks from ${start} to ${start + count - 1} (chain height: ${chainHeight})`)
     return api.get('/blockchain', { params: { start, limit: count } })
   },
 }
