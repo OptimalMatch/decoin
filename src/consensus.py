@@ -26,7 +26,7 @@ class HybridConsensus:
         self.minimum_stake = 1000
         self.stake_weight = 0.7
         self.work_weight = 0.3
-        self.block_time = 30
+        self.block_time = 2  # Reduced to match blockchain setting
         self.difficulty_adjustment_interval = 100
         self.max_validators_per_round = 10
         
@@ -118,7 +118,7 @@ class HybridConsensus:
         
         return True, work_score
     
-    def mine_block_hybrid(self, block: Block, validator_address: str, timeout: int = 30) -> bool:
+    def mine_block_hybrid(self, block: Block, validator_address: str, timeout: int = 5) -> bool:
         if validator_address not in self.validators:
             return False
         
@@ -225,32 +225,48 @@ class ConsensusManager:
         self.blockchain = blockchain
         self.consensus = HybridConsensus(blockchain)
         self.is_mining = False
+        self.min_transactions_for_block = 1  # Mine immediately when transactions arrive
+        self.max_wait_time = 0.1  # Minimal wait time for maximum throughput
+        self.last_block_time = time.time()
         
     def start_validation(self, validator_address: str) -> None:
         self.is_mining = True
-        
+
         while self.is_mining:
-            if not self.blockchain.pending_transactions:
-                time.sleep(1)
+            # Implement transaction batching
+            current_time = time.time()
+            time_since_last = current_time - self.last_block_time
+            pending_count = len(self.blockchain.pending_transactions)
+
+            # Wait for batch or timeout
+            should_mine = (
+                pending_count >= self.min_transactions_for_block or
+                (pending_count > 0 and time_since_last >= self.max_wait_time)
+            )
+
+            if not should_mine:
+                time.sleep(0.01)  # Minimal sleep for maximum responsiveness
                 continue
-            
+
             selected_validator = self.consensus.select_validator()
             if selected_validator != validator_address:
-                time.sleep(1)
+                time.sleep(0.01)  # Minimal sleep for maximum responsiveness
                 continue
-            
+
             block = self.blockchain.create_block(validator_address)
             if not block:
                 continue
-            
+
             success = self.consensus.mine_block_hybrid(block, validator_address)
             if success:
                 if self.blockchain.add_block(block):
                     rewards = self.consensus.calculate_rewards(block)
-                    print(f"Block {block.index} mined! Rewards: {rewards}")
+                    tx_count = len(block.transactions) - 1  # Exclude coinbase
+                    print(f"Block {block.index} mined with {tx_count} transactions! Rewards: {rewards}")
                     self.consensus.adjust_difficulty()
-            
-            time.sleep(1)
+                    self.last_block_time = current_time
+
+            time.sleep(0.01)  # Minimal sleep for maximum responsiveness
     
     def stop_validation(self) -> None:
         self.is_mining = False

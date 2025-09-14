@@ -80,7 +80,7 @@ class DeCoinAPI:
             """Get blockchain information and blocks"""
             chain = self.blockchain.chain[start:start+limit]
             blocks = [self._block_to_response(block) for block in chain]
-            
+
             return ChainInfo(
                 height=len(self.blockchain.chain),
                 total_difficulty=sum(b.difficulty for b in self.blockchain.chain),

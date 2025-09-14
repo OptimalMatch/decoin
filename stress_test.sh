@@ -9,9 +9,9 @@ set -e
 NODES=(11080 11081 11082 11084 11085 11086 11083 11087)
 NODE_NAMES=("Node1" "Node2" "Node3" "Node4" "Node5" "Node6" "Validator1" "Validator2")
 TEST_DURATION=300  # Test duration in seconds (5 minutes)
-BATCH_SIZE=10      # Number of transactions per batch
-BATCH_DELAY=2      # Delay between batches in seconds
-CONCURRENT_USERS=5 # Number of concurrent test users
+BATCH_SIZE=50      # Increased to 50 tx per batch for maximum TPS
+BATCH_DELAY=0.01   # Minimal delay between batches for maximum TPS
+CONCURRENT_USERS=20 # Increased to 20 users for maximum TPS
 
 # Colors for output
 RED='\033[0;31m'
@@ -108,8 +108,8 @@ run_transaction_batch() {
             echo -n "x"
         fi
 
-        # Small delay between transactions
-        sleep 0.1
+        # No delay for maximum TPS
+        # sleep removed
     done
     echo ""
 }

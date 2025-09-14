@@ -52,7 +52,10 @@
       "Bash(./simple_stress.sh:*)",
       "Bash(awk:*)",
       "Bash(npm run build:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(echo:*)",
+      "Bash(./check_heights.sh:*)",
+      "Bash(./stress_test.sh:*)"
     ],
     "deny": [],
     "ask": []
