@@ -5,6 +5,7 @@ from fastapi import FastAPI, HTTPException, Path, Query, Body, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict, Any
 import time
+import json
 from datetime import datetime
 
 from schemas import (
@@ -61,6 +62,17 @@ class DeCoinAPI:
         @self.app.get("/status", response_model=NodeStatus, tags=["Node"])
         async def get_node_status():
             """Get current node status and statistics"""
+            # Calculate blockchain size
+            blockchain_bytes = len(json.dumps(self.blockchain.to_dict()).encode())
+            if blockchain_bytes < 1024:
+                blockchain_size = f"{blockchain_bytes} B"
+            elif blockchain_bytes < 1024 * 1024:
+                blockchain_size = f"{blockchain_bytes / 1024:.2f} KB"
+            elif blockchain_bytes < 1024 * 1024 * 1024:
+                blockchain_size = f"{blockchain_bytes / (1024 * 1024):.2f} MB"
+            else:
+                blockchain_size = f"{blockchain_bytes / (1024 * 1024 * 1024):.2f} GB"
+
             return NodeStatus(
                 node_id=self.node.node.node_id,
                 chain_height=len(self.blockchain.chain),
@@ -69,7 +81,8 @@ class DeCoinAPI:
                 is_mining=self.node.is_mining,
                 difficulty=self.blockchain.difficulty,
                 version="1.0.0",
-                uptime=time.time() - self.start_time
+                uptime=time.time() - self.start_time,
+                blockchain_size=blockchain_size
             )
         
         @self.app.get("/blockchain", response_model=ChainInfo, tags=["Blockchain"])

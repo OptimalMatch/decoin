@@ -105,6 +105,7 @@ class NodeStatus(BaseModel):
     difficulty: int = Field(..., description="Current mining difficulty")
     version: str = Field(default="1.0.0", description="Node software version")
     uptime: Optional[float] = Field(default=None, description="Node uptime in seconds")
+    blockchain_size: Optional[str] = Field(default=None, description="Total blockchain size")
     
     class Config:
         json_schema_extra = {

@@ -1,6 +1,6 @@
 import React from 'react'
 import { useQuery } from 'react-query'
-import { FiBox, FiActivity, FiUsers, FiCpu } from 'react-icons/fi'
+import { FiBox, FiActivity, FiUsers, FiCpu, FiDatabase } from 'react-icons/fi'
 import { LineChart, Line, AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { nodeAPI, blockchainAPI, statsAPI } from '../services/api'
 
@@ -24,6 +24,13 @@ function Dashboard() {
       icon: FiBox,
       color: 'text-blue-600',
       bgColor: 'bg-blue-100',
+    },
+    {
+      title: 'Blockchain Size',
+      value: status?.blockchain_size || 'N/A',
+      icon: FiDatabase,
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-100',
     },
     {
       title: 'Pending Transactions',
@@ -79,7 +86,7 @@ function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {stats.map((stat) => (
           <div key={stat.title} className="card">
             <div className="flex items-center justify-between">
