@@ -40,7 +40,18 @@
       "Bash(./quick_test.sh:*)",
       "Bash(bash:*)",
       "Bash(timeout:*)",
-      "Bash(./robust_stress.sh:*)"
+      "Bash(./robust_stress.sh:*)",
+      "Bash(do basename \"$file\")",
+      "Bash(grep:*)",
+      "Bash(do sed -i 's/\"\"validator_address\"\": \"\"validator[0-9]_address\"\"/\"\"validator_address\"\": null/' /home/unidatum/github/decoin/config/docker/node$node.json)",
+      "Bash(sed:*)",
+      "Bash(do docker cp src/network.py $container:/app/src/network.py)",
+      "Bash(do docker cp src/transactions.py $container:/app/src/transactions.py)",
+      "Bash(do docker cp src/blockchain.py $container:/app/src/blockchain.py)",
+      "Bash(do echo -n \"Port $port genesis: \")",
+      "Bash(./simple_stress.sh:*)",
+      "Bash(awk:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []

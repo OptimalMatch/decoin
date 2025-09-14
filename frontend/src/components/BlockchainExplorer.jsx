@@ -9,8 +9,8 @@ function BlockchainExplorer() {
   const [searchTerm, setSearchTerm] = useState('')
 
   const { data: blockchain, isLoading } = useQuery(
-    'blockchain',
-    blockchainAPI.getBlockchain,
+    'fullBlockchain',
+    () => blockchainAPI.getBlockchain(0, 1000),
     { refetchInterval: 10000 }
   )
 

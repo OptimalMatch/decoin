@@ -60,10 +60,18 @@ api.interceptors.response.use(
 
 // Blockchain endpoints
 export const blockchainAPI = {
-  getBlockchain: () => api.get('/blockchain'),
+  getBlockchain: (start = 0, limit = 100) => api.get('/blockchain', { params: { start, limit } }),
   getBlock: (index) => api.get(`/block/${index}`),
   getLatestBlock: () => api.get('/blockchain/latest'),
   getBlockByHash: (hash) => api.get(`/block/hash/${hash}`),
+  getRecentBlocks: async (count = 100) => {
+    // First get the chain height
+    const status = await api.get('/status')
+    const chainHeight = status.data.chain_height
+    // Calculate start index to get the most recent blocks
+    const start = Math.max(0, chainHeight - count)
+    return api.get('/blockchain', { params: { start, limit: count } })
+  },
 }
 
 // Transaction endpoints
