@@ -231,12 +231,8 @@ def transfer(amount):
         assert contract.state["balance"] == 1000
         assert contract.is_active == True
     
-    def test_contract_execution(self):
-        """Test smart contract execution"""
-        # Skip this test - SmartContract execution has limitations
-        # The context variables aren't properly accessible in the executed code
-        # This is a known limitation of the simple contract implementation
-        
+    def test_contract_execution_is_refused(self):
+        """Arbitrary contract code must NOT execute — that path was RCE."""
         contract = SmartContract(
             contract_id="test_contract",
             code="def get_value(): return 42",
@@ -244,29 +240,29 @@ def transfer(amount):
             creator="alice",
             creation_time=time.time()
         )
-        
-        # Test simple function without context access
+
+        # The node refuses to run arbitrary code rather than exec() it.
         result = contract.execute("get_value", {}, "bob")
-        assert result == 42
-    
-    def test_contract_error_handling(self):
-        """Test smart contract error handling"""
-        contract_code = """
-def divide():
-    return params['a'] / params['b']
-        """
-        
+        assert isinstance(result, dict)
+        assert "error" in result
+        assert result != 42
+
+    def test_contract_code_cannot_reach_the_host(self):
+        """A payload that would escape the old empty-builtins 'sandbox' must not
+        run at all now."""
+        malicious = "import os\nos.system('touch /tmp/decoin_rce_probe')"
         contract = SmartContract(
-            contract_id="div_contract",
-            code=contract_code,
+            contract_id="evil_contract",
+            code=malicious,
             state={},
-            creator="alice",
+            creator="mallory",
             creation_time=time.time()
         )
-        
-        # Should handle division by zero
-        result = contract.execute("divide", {"a": 10, "b": 0}, "bob")
-        assert "error" in result  # Error returns error dict
+
+        result = contract.execute("anything", {}, "mallory")
+        assert isinstance(result, dict) and "error" in result
+        # The code is retained on-chain as data, never executed.
+        assert contract.code == malicious
 
 
 class TestTransactionTypes:
