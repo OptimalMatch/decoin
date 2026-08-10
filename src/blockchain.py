@@ -24,13 +24,17 @@ class Transaction:
     timestamp: float
     metadata: Dict[str, Any] = field(default_factory=dict)
     signature: Optional[str] = None
+    public_key: Optional[str] = None
     tx_hash: Optional[str] = None
-    
+
     def __post_init__(self):
         if not self.tx_hash:
             self.tx_hash = self.calculate_hash()
-    
-    def calculate_hash(self) -> str:
+
+    def signing_bytes(self) -> bytes:
+        """The canonical content a signature commits to: everything that defines
+        the transaction, but NOT the signature, public key, or tx_hash (which are
+        derived from it). Signing and hashing cover exactly the same bytes."""
         tx_data = {
             'type': self.tx_type.value,
             'sender': self.sender,
@@ -39,9 +43,33 @@ class Transaction:
             'timestamp': self.timestamp,
             'metadata': self.metadata
         }
-        tx_string = json.dumps(tx_data, sort_keys=True)
-        return hashlib.sha256(tx_string.encode()).hexdigest()
-    
+        return json.dumps(tx_data, sort_keys=True).encode()
+
+    def calculate_hash(self) -> str:
+        return hashlib.sha256(self.signing_bytes()).hexdigest()
+
+    def sign_with(self, wallet) -> None:
+        """Attach the wallet's public key and a signature over signing_bytes.
+        The sender address must already be the wallet's address, or the signature
+        will not verify (the key would not hash to the sender)."""
+        self.public_key = wallet.public_key_hex
+        self.signature = wallet.sign(self.signing_bytes())
+
+    def is_signature_valid(self) -> bool:
+        """True only if this transaction carries a signature and public key, the
+        public key hashes to the sender address, and the signature verifies over
+        the transaction's content. This is what makes an address spendable only
+        by the holder of its private key."""
+        from wallet import verify_signature, address_from_public_key_hex
+        if not self.signature or not self.public_key:
+            return False
+        try:
+            if address_from_public_key_hex(self.public_key) != self.sender:
+                return False
+        except (ValueError, TypeError):
+            return False
+        return verify_signature(self.public_key, self.signature, self.signing_bytes())
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             'tx_hash': self.tx_hash,
@@ -51,7 +79,8 @@ class Transaction:
             'amount': self.amount,
             'timestamp': self.timestamp,
             'metadata': self.metadata,
-            'signature': self.signature
+            'signature': self.signature,
+            'public_key': self.public_key
         }
 
 @dataclass
@@ -141,6 +170,11 @@ class Blockchain:
         self.block_time = 2  # Reduced to 2 seconds for very fast blocks
         self.max_block_size = 10 * 1024 * 1024
         self.parallel_validator = ParallelTransactionValidator(self, max_workers=4)
+        # When True, every non-minter transaction must carry a valid signature
+        # whose public key hashes to the sender address. DeCoin shipped with no
+        # signatures at all; this is the switch that makes an address spendable
+        # only by its key-holder.
+        self.require_signatures = False
         self.create_genesis_block()
     
     def create_genesis_block(self) -> None:
@@ -186,6 +220,10 @@ class Blockchain:
         if transaction.amount < 0:
             return False
         if len(json.dumps(transaction.metadata)) > 1024:
+            return False
+        if (self.require_signatures
+                and transaction.sender not in self.MINTERS
+                and not transaction.is_signature_valid()):
             return False
         return True
     
@@ -257,6 +295,11 @@ class Blockchain:
                 return False
             fee = tx.metadata.get('fee', 0)
             if tx.sender not in self.MINTERS:
+                # The spender must own the address: a valid signature whose key
+                # hashes to the sender. Minters (genesis/coinbase/faucet) create
+                # coin and have no key, so they are exempt.
+                if self.require_signatures and not tx.is_signature_valid():
+                    return False
                 if balances.get(tx.sender, 0) < tx.amount + fee:
                     return False
                 balances[tx.sender] = balances.get(tx.sender, 0) - (tx.amount + fee)
