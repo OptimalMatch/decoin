@@ -77,8 +77,12 @@ class Block:
     def calculate_merkle_root(self) -> str:
         if not self.transactions:
             return hashlib.sha256(b'').hexdigest()
-        
-        hashes = [tx.tx_hash for tx in self.transactions]
+
+        # Hash each transaction's CONTENT, not its stored tx_hash. A stored hash
+        # can go stale (tampering) or arrive forged over the wire; recomputing
+        # here is what makes the Merkle root — and the block hash above it — a
+        # real commitment to the transactions the block actually contains.
+        hashes = [tx.calculate_hash() for tx in self.transactions]
         
         while len(hashes) > 1:
             if len(hashes) % 2 != 0:
@@ -169,12 +173,20 @@ class Blockchain:
         self.pending_transactions.append(transaction)
         return True
     
+    # Senders that mint coin rather than spend it: the genesis grant, the
+    # coinbase/mining reward, and the faucet. They are exempt from balance checks
+    # because that is precisely how new coin enters circulation.
+    MINTERS = {'genesis', 'mining_reward', 'system', 'coinbase'}
+
     def validate_transaction(self, transaction: Transaction) -> bool:
-        # Simplified validation for maximum throughput
+        # Mempool admission is a STRUCTURAL check. The consensus balance rule —
+        # every spend must be covered — is enforced when a block is validated
+        # (see validate_block), because a transaction can be funded by an earlier
+        # transaction in the same block, which no per-transaction check can see.
         if transaction.amount < 0:
             return False
-
-        # Skip balance checks for stress testing - just validate structure
+        if len(json.dumps(transaction.metadata)) > 1024:
+            return False
         return True
     
     def create_block(self, validator: str, stake_weight: float = 0.7) -> Block:
@@ -188,7 +200,7 @@ class Blockchain:
             sender="system",
             recipient=validator,
             amount=block_reward,
-            timestamp=datetime.now().isoformat(),
+            timestamp=time.time(),
             tx_type=TransactionType.STANDARD,
             metadata={"type": "coinbase", "block_height": block_height}
         )
@@ -222,6 +234,35 @@ class Blockchain:
         ]
         return True
     
+    def _confirmed_balances(self) -> Dict[str, float]:
+        """Balances from the committed chain only, as a mutable map we can
+        replay a candidate block against."""
+        balances: Dict[str, float] = {}
+        for blk in self.chain:
+            for tx in blk.transactions:
+                fee = tx.metadata.get('fee', 0)
+                if tx.sender not in self.MINTERS:
+                    balances[tx.sender] = balances.get(tx.sender, 0) - (tx.amount + fee)
+                balances[tx.recipient] = balances.get(tx.recipient, 0) + tx.amount
+        return balances
+
+    def _transactions_cover_their_spends(self, transactions: List[Transaction]) -> bool:
+        """Validate a block's transactions IN ORDER against a running balance, so
+        a transaction funded earlier in the same block is honoured — and a spend
+        the sender cannot cover makes the whole block invalid. Order matters,
+        which is exactly why this cannot be parallelised across transactions."""
+        balances = self._confirmed_balances()
+        for tx in transactions:
+            if tx.amount < 0:
+                return False
+            fee = tx.metadata.get('fee', 0)
+            if tx.sender not in self.MINTERS:
+                if balances.get(tx.sender, 0) < tx.amount + fee:
+                    return False
+                balances[tx.sender] = balances.get(tx.sender, 0) - (tx.amount + fee)
+            balances[tx.recipient] = balances.get(tx.recipient, 0) + tx.amount
+        return True
+
     def validate_block(self, block: Block) -> bool:
         if block.index != len(self.chain):
             return False
@@ -235,11 +276,15 @@ class Blockchain:
         if not block.block_hash.startswith('0' * self.difficulty):
             return False
 
-        # Use parallel validation for block transactions
-        validation_results = self.parallel_validator.validate_batch(block.transactions)
-        for tx, is_valid in validation_results:
-            if not is_valid:
-                return False
+        # Integrity: the stored hash must match the block's actual contents.
+        # Without this a tampered block — or a hash forged and sent over the
+        # network — sails through, because everything above trusts block_hash.
+        if block.block_hash != block.calculate_hash():
+            return False
+
+        # Consensus rule: every spend in the block must be covered.
+        if not self._transactions_cover_their_spends(block.transactions):
+            return False
 
         return True
     
@@ -250,13 +295,19 @@ class Blockchain:
             
             if current_block.previous_hash != previous_block.block_hash:
                 return False
-            
+
+            # The stored Merkle root must still match the transactions it commits
+            # to, so tampering with any transaction is caught here — calculate_hash
+            # trusts the stored root, this check does not.
+            if current_block.merkle_root != current_block.calculate_merkle_root():
+                return False
+
             if current_block.block_hash != current_block.calculate_hash():
                 return False
-            
+
             if not current_block.block_hash.startswith('0' * self.difficulty):
                 return False
-        
+
         return True
     
     def get_balance(self, address: str, include_pending: bool = True) -> float:

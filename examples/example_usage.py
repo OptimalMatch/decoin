@@ -144,6 +144,12 @@ def demo_mining():
     consensus.register_validator("validator3", 2000)
     
     builder = TransactionBuilder()
+    # Fund the senders first. A spend the sender cannot cover makes the whole
+    # block invalid, so the mint from "system" has to come before the transfers.
+    for i in range(10):
+        blockchain.add_transaction(builder.create_standard_transaction(
+            sender="system", recipient=f"user{i}", amount=1000, fee=0
+        ))
     for i in range(10):
         tx = builder.create_standard_transaction(
             sender=f"user{i}",
@@ -152,7 +158,7 @@ def demo_mining():
             fee=0.001
         )
         blockchain.add_transaction(tx)
-    
+
     selected = consensus.select_validator()
     print(f"Selected validator: {selected}")
     
@@ -180,6 +186,12 @@ def demo_blockchain_validation():
     blockchain = Blockchain()
     builder = TransactionBuilder()
     
+    # Fund the senders once so every transfer below is covered.
+    for j in range(6):
+        blockchain.add_transaction(builder.create_standard_transaction(
+            sender="system", recipient=f"user{j}", amount=1000, fee=0
+        ))
+
     for i in range(3):
         for j in range(5):
             tx = builder.create_standard_transaction(
@@ -189,7 +201,7 @@ def demo_blockchain_validation():
                 fee=0.001
             )
             blockchain.add_transaction(tx)
-        
+
         block = blockchain.create_block(f"validator{i}")
         block.mine_block(blockchain.difficulty)
         blockchain.add_block(block)
