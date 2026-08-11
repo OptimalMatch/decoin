@@ -15,12 +15,29 @@ class TransactionType(Enum):
     ATOMIC_SWAP = "atomic_swap"
     DATA_STORAGE = "data_storage"
 
+
+# Money is INTEGER base units, never a float. A currency stored as float loses
+# cents to rounding and, worse here, breaks signatures: json.dumps(5) is "5" but
+# json.dumps(5.0) is "5.0", so a float amount signs and verifies inconsistently
+# across a JSON round-trip. One DEC is DECIMALS-place divisible; the base unit is
+# the smallest indivisible amount, and every amount and fee on the chain is an
+# integer count of them. Display code divides by BASE_UNITS_PER_COIN.
+DECIMALS = 8
+BASE_UNITS_PER_COIN = 10 ** DECIMALS
+
+
+def format_amount(base_units: int) -> str:
+    """Render an integer base-unit amount as a decimal DEC string (display only)."""
+    whole, frac = divmod(int(base_units), BASE_UNITS_PER_COIN)
+    return f"{whole}.{frac:0{DECIMALS}d}"
+
+
 @dataclass
 class Transaction:
     tx_type: TransactionType
     sender: str
     recipient: str
-    amount: float
+    amount: int
     timestamp: float
     metadata: Dict[str, Any] = field(default_factory=dict)
     # Per-sender sequence number for replay protection. A sender's transactions
@@ -275,6 +292,10 @@ class Blockchain:
         # every spend must be covered — is enforced when a block is validated
         # (see validate_block), because a transaction can be funded by an earlier
         # transaction in the same block, which no per-transaction check can see.
+        # Money must be a non-negative INTEGER count of base units (bool is a
+        # Python int subclass, so exclude it explicitly).
+        if isinstance(transaction.amount, bool) or not isinstance(transaction.amount, int):
+            return False
         if transaction.amount < 0:
             return False
         if len(json.dumps(transaction.metadata)) > 1024:
@@ -297,7 +318,7 @@ class Blockchain:
         block_height = len(self.chain)
         halvings = block_height // 100000  # Halving every 100,000 blocks
         base_reward = 50
-        block_reward = base_reward / (2 ** halvings)
+        block_reward = base_reward // (2 ** halvings)  # integer base units
 
         coinbase_tx = Transaction(
             sender="system",
@@ -369,9 +390,11 @@ class Blockchain:
         balances = self._confirmed_balances()
         nonces = self._confirmed_nonces()
         for tx in transactions:
-            if tx.amount < 0:
+            if isinstance(tx.amount, bool) or not isinstance(tx.amount, int) or tx.amount < 0:
                 return False
             fee = tx.metadata.get('fee', 0)
+            if not isinstance(fee, int) or fee < 0:
+                return False
             if tx.sender not in self.MINTERS:
                 # The spender must own the address: a valid signature whose key
                 # hashes to the sender. Minters (genesis/coinbase/faucet) create

@@ -167,26 +167,29 @@ class HybridConsensus:
         elif time_taken > expected_time * 2:
             self.blockchain.difficulty = max(1, self.blockchain.difficulty - 1)
     
-    def calculate_rewards(self, block: Block) -> Dict[str, float]:
+    def calculate_rewards(self, block: Block) -> Dict[str, int]:
         rewards = {}
-        
+
+        # Integer base units throughout; splits use integer division and the
+        # remainder falls to the block's own validator (no fractional coin).
         base_reward = 50
         halvings = len(self.blockchain.chain) // 210000
-        block_reward = base_reward / (2 ** halvings)
-        
+        block_reward = base_reward // (2 ** halvings)
+
         tx_fees = sum(
             tx.metadata.get('fee', 0) for tx in block.transactions
         )
-        
+
         total_reward = block_reward + tx_fees
-        
+
         if block.validator:
-            validator_reward = total_reward * 0.7
+            validator_reward = total_reward * 70 // 100
             rewards[block.validator] = validator_reward
-            
+
             participating_validators = self.get_participating_validators(block)
             if participating_validators:
-                participation_reward = total_reward * 0.3 / len(participating_validators)
+                participation_pool = total_reward - validator_reward
+                participation_reward = participation_pool // len(participating_validators)
                 for v in participating_validators:
                     rewards[v] = rewards.get(v, 0) + participation_reward
         

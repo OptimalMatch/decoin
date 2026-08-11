@@ -189,7 +189,7 @@ class DeCoinAPI:
                         sender=tx_request.sender,
                         recipient=tx_request.recipient,
                         amount=tx_request.amount,
-                        fee=tx_request.metadata.get('fee', 0.001) if tx_request.metadata else 0.001,
+                        fee=tx_request.metadata.get('fee', 0) if tx_request.metadata else 0,
                         metadata=tx_request.metadata or {}
                     )
                 elif tx_request.transaction_type == "multisig":
@@ -198,7 +198,7 @@ class DeCoinAPI:
                         recipient=tx_request.recipient,
                         amount=tx_request.amount,
                         required_signatures=tx_request.metadata.get('required_signatures', 2),
-                        fee=tx_request.metadata.get('fee', 0.002)
+                        fee=tx_request.metadata.get('fee', 0)
                     )
                 elif tx_request.transaction_type == "timelocked":
                     tx = self.transaction_builder.create_time_locked_transaction(
@@ -207,13 +207,13 @@ class DeCoinAPI:
                         amount=tx_request.amount,
                         unlock_time=tx_request.metadata.get('unlock_time', 
                             int((datetime.now().timestamp() + 3600))),
-                        fee=tx_request.metadata.get('fee', 0.001)
+                        fee=tx_request.metadata.get('fee', 0)
                     )
                 elif tx_request.transaction_type == "data":
                     tx = self.transaction_builder.create_data_storage_transaction(
                         sender=tx_request.sender,
                         data=tx_request.metadata.get('data', {}),
-                        fee=tx_request.metadata.get('fee', 0.005)
+                        fee=tx_request.metadata.get('fee', 0)
                     )
                 else:
                     raise HTTPException(status_code=400, detail="Invalid transaction type")

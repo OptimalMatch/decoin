@@ -33,11 +33,9 @@ def _body(tx: Transaction):
     }
 
 
-# amount is a float on purpose: the JSON round-trip coerces it to float, so the
-# client must sign the same float or the reconstructed signing bytes differ
-# ("5" vs "5.0"). This fragility is itself an argument for integer money — see
-# the float-money repair.
-def _signed_standard(wallet: Wallet, recipient="DECbob", amount=5.0):
+# amount is an integer number of base units, so the JSON round-trip is exact
+# ("5" always) — the float canonicalization hazard ("5" vs "5.0") is gone.
+def _signed_standard(wallet: Wallet, recipient="DECbob", amount=5):
     tx = Transaction(
         tx_type=TransactionType.STANDARD,
         sender=wallet.address, recipient=recipient, amount=amount,
