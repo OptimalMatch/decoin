@@ -23,7 +23,17 @@ class DeCoinAPI:
         self.blockchain = node.blockchain
         self.transaction_builder = node.transaction_builder
         self.start_time = time.time()
-        
+
+        # Faucet rate-limiting state (see the /faucet route). Addresses are free
+        # to generate, so a per-address cap alone gates nothing; we also cap the
+        # number of grants in a rolling window across ALL addresses.
+        self._faucet_last_grant: Dict[str, float] = {}
+        self._faucet_grants: List[float] = []
+        self.FAUCET_AMOUNT = 100.0
+        self.FAUCET_ADDRESS_COOLDOWN = 3600      # seconds between grants per address
+        self.FAUCET_WINDOW = 3600                # rolling window for the global cap
+        self.FAUCET_MAX_PER_WINDOW = 100         # grants allowed per window, all addresses
+
         # Create FastAPI app with metadata
         self.app = FastAPI(
             title="DeCoin API",
@@ -35,10 +45,13 @@ class DeCoinAPI:
         )
         
         # Configure CORS
+        # allow_origins=["*"] with allow_credentials=True is rejected by browsers
+        # and is unsafe; the correct pairing for an open, credential-free API is
+        # a wildcard origin with credentials off.
         self.app.add_middleware(
             CORSMiddleware,
             allow_origins=["*"],
-            allow_credentials=True,
+            allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
         )
@@ -229,9 +242,30 @@ class DeCoinAPI:
             address: str = Path(..., description="Wallet address to fund")
         ):
             """Get free test coins from faucet (testnet only)"""
-            # Check if address has already received faucet funds recently
-            current_balance = self.blockchain.get_balance(address)
-            if current_balance > 100:
+            now = time.time()
+
+            # A per-address balance cap alone is not a limit: addresses are free,
+            # so anyone can mint unlimited supply by cycling fresh addresses. The
+            # real gate a faucet needs is on the *requester* (IP, captcha, or
+            # account); lacking that here, we cap grants globally per window and
+            # cool down each address. This bounds the damage; it does not remove
+            # the underlying point that address-only gating is ungated.
+            self._faucet_grants = [t for t in self._faucet_grants
+                                   if now - t < self.FAUCET_WINDOW]
+            if len(self._faucet_grants) >= self.FAUCET_MAX_PER_WINDOW:
+                raise HTTPException(
+                    status_code=429,
+                    detail="Faucet rate limit reached; try again later"
+                )
+
+            last = self._faucet_last_grant.get(address, 0)
+            if now - last < self.FAUCET_ADDRESS_COOLDOWN:
+                raise HTTPException(
+                    status_code=429,
+                    detail="This address was funded recently; try again later"
+                )
+
+            if self.blockchain.get_balance(address) > self.FAUCET_AMOUNT:
                 raise HTTPException(
                     status_code=429,
                     detail="Address already has sufficient balance"
@@ -241,16 +275,18 @@ class DeCoinAPI:
             faucet_tx = self.transaction_builder.create_standard_transaction(
                 sender="system",
                 recipient=address,
-                amount=100.0,  # Give 100 test coins
+                amount=self.FAUCET_AMOUNT,
                 fee=0,
                 metadata={"type": "faucet", "timestamp": datetime.now().isoformat()}
             )
 
             if self.blockchain.add_transaction(faucet_tx):
+                self._faucet_grants.append(now)
+                self._faucet_last_grant[address] = now
                 await self.node.node.broadcast_transaction(faucet_tx)
                 return SuccessResponse(
                     message="Faucet funds sent successfully",
-                    data={"transaction_id": faucet_tx.tx_hash, "amount": 100.0}
+                    data={"transaction_id": faucet_tx.tx_hash, "amount": self.FAUCET_AMOUNT}
                 )
             else:
                 raise HTTPException(status_code=500, detail="Failed to send faucet funds")

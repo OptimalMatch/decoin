@@ -50,15 +50,25 @@ class TestBlockchain:
         blockchain.add_transaction(sample_transaction)
         
         block = blockchain.create_block("test_validator")
-        
+
         assert block.index == 1
         assert block.previous_hash == blockchain.chain[0].calculate_hash()
-        assert len(block.transactions) == 1
-        assert block.transactions[0] == sample_transaction
+        # A block carries a coinbase transaction (the miner's reward) ahead of
+        # the pending transactions, so this block has two: coinbase + sample.
+        assert len(block.transactions) == 2
+        assert block.transactions[0].metadata.get("type") == "coinbase"
+        assert block.transactions[0].recipient == "test_validator"
+        assert block.transactions[1] == sample_transaction
         assert block.validator == "test_validator"
     
     def test_add_block(self, blockchain, sample_transaction):
         """Test adding a valid block to the chain"""
+        # Fund alice first: her spend (sample_transaction) must be covered or the
+        # block is rejected. The mint comes from a system sender.
+        blockchain.add_transaction(Transaction(
+            tx_type=TransactionType.STANDARD,
+            sender="system", recipient="alice", amount=100, timestamp=time.time()
+        ))
         blockchain.add_transaction(sample_transaction)
         block = blockchain.create_block("test_validator")
         
@@ -77,8 +87,12 @@ class TestBlockchain:
     def test_validate_chain(self, blockchain):
         """Test blockchain validation"""
         assert blockchain.validate_chain() == True
-        
-        # Add a valid block
+
+        # Add a valid block (fund alice first so her spend is covered)
+        blockchain.add_transaction(Transaction(
+            tx_type=TransactionType.STANDARD,
+            sender="system", recipient="alice", amount=50, timestamp=time.time()
+        ))
         tx = Transaction(
             tx_type=TransactionType.STANDARD,
             sender="alice",
@@ -88,20 +102,19 @@ class TestBlockchain:
         )
         blockchain.add_transaction(tx)
         block = blockchain.create_block("validator")
-        
+
         # Mine it
         while not block.calculate_hash().startswith("0" * blockchain.difficulty):
             block.nonce += 1
         block.block_hash = block.calculate_hash()
-        
-        blockchain.add_block(block)
+
+        assert blockchain.add_block(block) == True
         assert blockchain.validate_chain() == True
-        
-        # Tamper with the chain
+
+        # Tampering changes a block's contents, so its stored hash no longer
+        # matches what the contents now hash to — validation catches it.
         blockchain.chain[1].transactions[0].amount = 100
-        # Note: Our simplified implementation doesn't re-validate hashes
-        # In a production system, this would fail validation
-        assert blockchain.validate_chain() == True
+        assert blockchain.validate_chain() == False
     
     def test_get_balance(self, blockchain):
         """Test balance calculation"""
@@ -148,7 +161,11 @@ class TestBlockchain:
     
     def test_validate_block(self, blockchain):
         """Test individual block validation"""
-        # Create a valid block
+        # Create a valid block (fund alice first so her spend is covered)
+        blockchain.add_transaction(Transaction(
+            tx_type=TransactionType.STANDARD,
+            sender="system", recipient="alice", amount=50, timestamp=time.time()
+        ))
         tx = Transaction(
             tx_type=TransactionType.STANDARD,
             sender="alice",
@@ -158,23 +175,22 @@ class TestBlockchain:
         )
         blockchain.add_transaction(tx)
         block = blockchain.create_block("validator")
-        
-        # Should be invalid before mining
+
+        # Should be invalid before mining (proof-of-work not satisfied)
         assert blockchain.validate_block(block) == False
-        
+
         # Mine the block
         while not block.calculate_hash().startswith("0" * blockchain.difficulty):
             block.nonce += 1
         block.block_hash = block.calculate_hash()
-        
-        # Should be valid after mining
+
+        # Should be valid after mining: funded, proof-of-work met, hash intact
         assert blockchain.validate_block(block) == True
-        
-        # Tamper with block
-        block.transactions[0].amount = 1000
-        # Note: Our simplified validation only checks PoW difficulty
-        # In production, this would also validate transaction integrity
-        assert blockchain.validate_block(block) == True
+
+        # Tampering with a transaction changes the block's contents, so its
+        # stored hash no longer matches — validation now rejects it.
+        block.transactions[-1].amount = 1000
+        assert blockchain.validate_block(block) == False
     
     def test_to_dict(self, blockchain):
         """Test blockchain serialization to dictionary"""

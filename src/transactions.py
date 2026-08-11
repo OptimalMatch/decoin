@@ -37,21 +37,21 @@ class SmartContract:
     is_active: bool = True
     
     def execute(self, function: str, params: Dict[str, Any], sender: str) -> Any:
-        context = {
-            'contract': self,
+        # The previous implementation ran the contract with
+        #     exec(self.code, {'__builtins__': {}}, context)
+        # which is remote code execution, not a sandbox: an empty __builtins__ is
+        # trivially escaped (e.g. ().__class__.__base__.__subclasses__(...)), so
+        # any deployed "contract" could read files, open sockets, or spawn
+        # processes on every validating node. A real contract platform executes
+        # bytecode in a constrained, gas-metered VM with no host access — which
+        # DeCoin does not have. Rather than pretend the exec() is safe, the node
+        # refuses to execute arbitrary code. The contract's code and state are
+        # still stored on-chain as data; running them needs a real VM.
+        return {
+            'error': 'contract execution is disabled: no sandboxed VM',
+            'function': function,
             'sender': sender,
-            'params': params,
-            'timestamp': time.time()
         }
-        
-        try:
-            exec(self.code, {'__builtins__': {}}, context)
-            if function in context:
-                return context[function]()
-        except Exception as e:
-            return {'error': str(e)}
-        
-        return None
 
 class TransactionBuilder:
     @staticmethod

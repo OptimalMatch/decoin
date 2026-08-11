@@ -85,16 +85,20 @@ class HybridConsensus:
         work_valid, work_score = self.validate_work(block)
         if not work_valid:
             return False, 0
-        
-        total_score = (stake_valid * self.stake_weight) + (work_score * self.work_weight)
-        
-        if total_score >= 0.5:
-            validator.blocks_validated += 1
-            validator.last_validation_time = time.time()
-            validator.reputation = min(2.0, validator.reputation * 1.01)
-            return True, total_score
-        
-        return False, total_score
+
+        # Both the stake requirement and the proof-of-work are hard gates above,
+        # so reaching here means both passed. Combine a GRADED stake score with
+        # the work score for the validator's quality metric. The previous line
+        # multiplied the BOOLEAN stake_valid by the weight — True * 0.7 = 0.7 —
+        # which cleared the 0.5 threshold unconditionally, so the work component
+        # (weight 0.3) could never affect the outcome and the "hybrid" was not.
+        stake_score = min(1.0, validator.stake / (self.minimum_stake * 10))
+        total_score = (stake_score * self.stake_weight) + (work_score * self.work_weight)
+
+        validator.blocks_validated += 1
+        validator.last_validation_time = time.time()
+        validator.reputation = min(2.0, validator.reputation * 1.01)
+        return True, total_score
     
     def validate_stake(self, validator: Validator, block: Block) -> bool:
         required_stake = self.calculate_required_stake(block)
@@ -130,7 +134,10 @@ class HybridConsensus:
         start_time = time.time()
         nonce = 0
         
-        base_difficulty = max(1, self.blockchain.difficulty - 2)
+        # The miner must search for the SAME difficulty the validator enforces.
+        # Using difficulty - 2 meant that at difficulty >= 3 the miner produced
+        # blocks that validate_work then rejected, so mining could never succeed.
+        base_difficulty = self.blockchain.difficulty
         
         while time.time() - start_time < timeout:
             block.nonce = nonce

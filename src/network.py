@@ -505,9 +505,25 @@ class P2PNode:
             return None
     
     def validate_chain(self, chain: List[Block]) -> bool:
-        for i in range(1, len(chain)):
-            if chain[i].previous_hash != chain[i-1].block_hash:
-                return False
-            if chain[i].block_hash != chain[i].calculate_hash():
+        # A peer's chain being longer is not a reason to trust it. The old check
+        # (links + hash recompute) let a peer replace your chain with a longer
+        # fabricated one: a different genesis, unmined blocks, tampered
+        # transactions, or spends from empty accounts all sailed through.
+        if not chain:
+            return False
+
+        # Pin the genesis: the candidate must share our exact genesis block, or
+        # it is a different network's chain, not a longer version of ours.
+        if chain[0].block_hash != self.blockchain.chain[0].block_hash:
+            return False
+
+        # Replay the candidate through a fresh chain under the SAME consensus
+        # rules the local node enforces on its own blocks — links, proof-of-work,
+        # block-hash integrity, Merkle-root-from-content, and ordered balance
+        # coverage (Blockchain.validate_block). If every block is accepted, the
+        # chain is valid; if any is not, we keep ours.
+        replay = Blockchain()
+        for block in chain[1:]:
+            if not replay.add_block(block):
                 return False
         return True
