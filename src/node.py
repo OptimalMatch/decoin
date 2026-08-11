@@ -18,7 +18,13 @@ class DeCoinNode:
             port=self.config['port'],
             blockchain=self.blockchain
         )
-        self.consensus_manager = ConsensusManager(self.blockchain)
+        # Share the P2P node's consensus manager instead of creating a second
+        # one. Previously the node mined from its own validator registry while
+        # validator registrations arriving over the network landed in the P2P
+        # node's separate registry — so every node only ever saw itself as a
+        # validator (block_height % 1 == 0) and the testnet never reached
+        # consensus. One registry, shared by mining and the network.
+        self.consensus_manager = self.node.consensus_manager
         self.transaction_builder = TransactionBuilder()
         self.is_mining = False
         self.validator_address = self.config.get('validator_address')
