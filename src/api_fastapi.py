@@ -175,6 +175,7 @@ class DeCoinAPI:
                         recipient=tx_request.recipient,
                         amount=tx_request.amount,
                         timestamp=tx_request.timestamp,
+                        nonce=tx_request.nonce or 0,
                         metadata=tx_request.metadata or {},
                         signature=tx_request.signature,
                         public_key=tx_request.public_key,
