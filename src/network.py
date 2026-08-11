@@ -294,6 +294,9 @@ class P2PNode:
         if new_chain and len(new_chain) > len(self.blockchain.chain):
             if self.validate_chain(new_chain):
                 self.blockchain.chain = new_chain
+                # The chain was replaced wholesale, so the incremental balance and
+                # nonce caches must be rebuilt from the adopted chain.
+                self.blockchain._rebuild_state()
                 print(f"Blockchain updated from peer {peer.address}")
     
     async def handle_get_mempool(self, message: Message, peer: PeerConnection):

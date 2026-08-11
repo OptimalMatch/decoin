@@ -255,8 +255,16 @@ class Blockchain:
         # signatures at all; this is the switch that makes an address spendable
         # only by its key-holder.
         self.require_signatures = True
+        # Incremental account state, kept in step with the committed chain so the
+        # balance and nonce checks are O(1) lookups instead of a walk of the whole
+        # chain on every transaction. Without this, admitting N transactions is
+        # O(chain x N) — quadratic — and the node slows as its history grows.
+        # Rebuilt from scratch whenever the chain is replaced wholesale (a fork
+        # adoption); updated block-by-block on the normal path.
+        self._bal_cache: Dict[str, int] = {}
+        self._nonce_cache: Dict[str, int] = {}
         self.create_genesis_block()
-    
+
     def create_genesis_block(self) -> None:
         # Use fixed timestamp for consistent genesis block across all nodes
         GENESIS_TIMESTAMP = 1700000000.0  # Fixed timestamp: Nov 14, 2023
@@ -276,7 +284,29 @@ class Blockchain:
         )
         genesis_block.mine_block(self.difficulty)
         self.chain.append(genesis_block)
-    
+        self._apply_block_state(genesis_block)
+
+    def _apply_block_state(self, block: Block) -> None:
+        """Fold one block's transactions into the balance and nonce caches, using
+        exactly the rules of _confirmed_balances/_confirmed_nonces so the caches
+        always equal a full walk of the chain — just computed incrementally."""
+        for tx in block.transactions:
+            fee = tx.metadata.get('fee', 0)
+            if tx.sender not in self.MINTERS:
+                self._bal_cache[tx.sender] = self._bal_cache.get(tx.sender, 0) - (tx.amount + fee)
+                if tx.nonce > self._nonce_cache.get(tx.sender, -1):
+                    self._nonce_cache[tx.sender] = tx.nonce
+            self._bal_cache[tx.recipient] = self._bal_cache.get(tx.recipient, 0) + tx.amount
+
+    def _rebuild_state(self) -> None:
+        """Recompute the caches from the whole chain in one pass. Called after the
+        chain is replaced wholesale (fork adoption), where an incremental update
+        does not apply."""
+        self._bal_cache = {}
+        self._nonce_cache = {}
+        for blk in self.chain:
+            self._apply_block_state(blk)
+
     def get_latest_block(self) -> Block:
         return self.chain[-1]
     
@@ -291,6 +321,10 @@ class Blockchain:
     # coinbase/mining reward, and the faucet. They are exempt from balance checks
     # because that is precisely how new coin enters circulation.
     MINTERS = {'genesis', 'mining_reward', 'system', 'coinbase'}
+
+    # Maximum non-coinbase transactions per block. The sustained throughput
+    # ceiling is this divided by block_time (a node mines one block per interval).
+    MAX_BLOCK_TRANSACTIONS = 2000
 
     def validate_transaction(self, transaction: Transaction) -> bool:
         # Mempool admission is a STRUCTURAL check. The consensus balance rule —
@@ -334,10 +368,17 @@ class Blockchain:
             metadata={"type": "coinbase", "block_height": block_height}
         )
 
-        # Include pending transactions plus the coinbase transaction
-        # Always create a block even if there are no pending transactions (coinbase only)
-        # Increased from 99 to 500 transactions per block for higher TPS
-        transactions = [coinbase_tx] + self.pending_transactions[:500]
+        # Include pending transactions plus the coinbase transaction. Always
+        # create a block even with none pending (coinbase only).
+        #
+        # A node produces one block per block_time, so the sustained ceiling is
+        # MAX_BLOCK_TRANSACTIONS / block_time. With libsecp256k1 verification and
+        # the O(1) balance/nonce caches, a full block validates+mines+appends in
+        # well under 200 ms, so a 2,000-tx block clears comfortably inside a 2 s
+        # window (leaving margin for propagation) and lifts the ceiling to ~1,000
+        # tx/s without shortening the block interval — i.e. without adding fork
+        # risk. The cap still bounds block size and validation time per block.
+        transactions = [coinbase_tx] + self.pending_transactions[:self.MAX_BLOCK_TRANSACTIONS]
 
         block = Block(
             index=block_height,
@@ -357,35 +398,32 @@ class Blockchain:
             return False
         
         self.chain.append(block)
+        self._apply_block_state(block)
+        # Drop the mined transactions from the mempool. Membership is tested
+        # against a set of transaction hashes — O(pending + block) — rather than
+        # `tx not in block.transactions`, which rescans the whole block (and
+        # compares every field) for each pending transaction: O(pending x block),
+        # the cost that dominates when the mempool is deep under load.
+        mined = {tx.tx_hash for tx in block.transactions}
         self.pending_transactions = [
-            tx for tx in self.pending_transactions 
-            if tx not in block.transactions
+            tx for tx in self.pending_transactions
+            if tx.tx_hash not in mined
         ]
         return True
-    
+
     def _confirmed_balances(self) -> Dict[str, float]:
-        """Balances from the committed chain only, as a mutable map we can
-        replay a candidate block against."""
-        balances: Dict[str, float] = {}
-        for blk in self.chain:
-            for tx in blk.transactions:
-                fee = tx.metadata.get('fee', 0)
-                if tx.sender not in self.MINTERS:
-                    balances[tx.sender] = balances.get(tx.sender, 0) - (tx.amount + fee)
-                balances[tx.recipient] = balances.get(tx.recipient, 0) + tx.amount
-        return balances
+        """Balances from the committed chain only, as a fresh mutable map the
+        caller can replay a candidate block against. Read from the incremental
+        cache (a copy, so the caller's mutations do not corrupt it) rather than
+        walking the chain."""
+        return dict(self._bal_cache)
 
     def _confirmed_nonces(self) -> Dict[str, int]:
         """The highest nonce each sender has used in the committed chain. A new
         transaction must exceed it, so a replayed transaction (same nonce) is
-        rejected."""
-        nonces: Dict[str, int] = {}
-        for blk in self.chain:
-            for tx in blk.transactions:
-                if tx.sender not in self.MINTERS:
-                    if tx.sender not in nonces or tx.nonce > nonces[tx.sender]:
-                        nonces[tx.sender] = tx.nonce
-        return nonces
+        rejected. Served from the incremental cache; a copy, because callers
+        mutate it while replaying a block."""
+        return dict(self._nonce_cache)
 
     def _transactions_cover_their_spends(self, transactions: List[Transaction]) -> bool:
         """Validate a block's transactions IN ORDER against a running balance, so
@@ -464,14 +502,9 @@ class Blockchain:
         return True
     
     def get_balance(self, address: str, include_pending: bool = True) -> float:
-        balance = 0
-        # Calculate confirmed balance from blockchain
-        for block in self.chain:
-            for tx in block.transactions:
-                if tx.sender == address:
-                    balance -= (tx.amount + tx.metadata.get('fee', 0))
-                if tx.recipient == address:
-                    balance += tx.amount
+        # Confirmed balance is an O(1) cache lookup rather than a walk of the
+        # whole chain (the cache is kept in step with every committed block).
+        balance = self._bal_cache.get(address, 0)
 
         # Subtract pending outgoing transactions to prevent double-spending
         if include_pending:

@@ -6,3 +6,4 @@ uvicorn[standard]>=0.27.0
 pydantic>=2.5.0
 python-multipart>=0.0.6ecdsa==0.19.2
 psutil>=5.9.0
+coincurve>=18  # libsecp256k1 fast-path for signature verification (optional; falls back to ecdsa)

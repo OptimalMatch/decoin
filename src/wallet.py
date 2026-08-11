@@ -18,8 +18,30 @@ from typing import List, Optional
 
 from ecdsa import SigningKey, VerifyingKey, SECP256k1, BadSignatureError
 
+# Verification runs on every node for every signature in every block, so it is
+# the hot path at scale. Pure-Python ecdsa verifies ~1,000/s; libsecp256k1 (the
+# C library Bitcoin and Ethereum use) does tens of thousands per core. Prefer it
+# when installed and fall back to pure Python so the project still clones and
+# runs with no compiled dependency. SIGNING stays on `ecdsa` either way, so the
+# signatures a wallet produces are byte-identical across backends and across
+# languages (the browser wallet must reproduce them exactly).
+try:
+    from coincurve import PublicKey as _CCPublicKey
+    from coincurve.ecdsa import (
+        deserialize_compact as _cc_deserialize_compact,
+        cdata_to_der as _cc_cdata_to_der,
+        signature_normalize as _cc_signature_normalize,
+    )
+    _HAVE_COINCURVE = True
+except ImportError:  # pragma: no cover - exercised only where coincurve is absent
+    _HAVE_COINCURVE = False
+
 ADDRESS_PREFIX = "DEC"
 MULTISIG_PREFIX = "DECMS"
+
+
+def _sha256d(message: bytes) -> bytes:
+    return hashlib.sha256(message).digest()
 
 
 def address_from_public_key(public_key_bytes: bytes) -> str:
@@ -50,10 +72,33 @@ def multisig_address(signer_addresses: List[str], required: int) -> str:
 def verify_signature(public_key_hex: str, signature_hex: str, message: bytes) -> bool:
     """True only if `signature_hex` is a valid secp256k1 signature over `message`
     for `public_key_hex`. Any malformed input is a verification failure, never an
-    exception the caller has to guard."""
+    exception the caller has to guard.
+
+    Both backends verify the same signatures: a 64-byte compact (r||s) signature
+    over SHA-256 of the message, for a 64-byte raw public key. The signature may
+    carry a high S value (the signing rule does not normalise it); a high-S
+    signature is mathematically valid, so both paths accept it — libsecp256k1
+    after an explicit low-S normalisation, which changes acceptance, not validity."""
     try:
-        vk = VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=SECP256k1)
-        return vk.verify(bytes.fromhex(signature_hex), message, hashfunc=hashlib.sha256)
+        pub = bytes.fromhex(public_key_hex)
+        sig = bytes.fromhex(signature_hex)
+    except (ValueError, TypeError):
+        return False
+    if len(pub) != 64 or len(sig) != 64:
+        return False
+
+    if _HAVE_COINCURVE:
+        try:
+            cdata = _cc_signature_normalize(_cc_deserialize_compact(sig))[1]
+            der = _cc_cdata_to_der(cdata)
+            # 0x04 == uncompressed-point prefix; ecdsa's to_string() omits it.
+            return _CCPublicKey(b"\x04" + pub).verify(der, message, hasher=_sha256d)
+        except Exception:
+            return False
+
+    try:
+        vk = VerifyingKey.from_string(pub, curve=SECP256k1)
+        return vk.verify(sig, message, hashfunc=hashlib.sha256)
     except (BadSignatureError, ValueError, TypeError):
         return False
 
