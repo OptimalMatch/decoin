@@ -82,16 +82,22 @@ class TransactionBuilder:
         required_signatures: int,
         fee: float = 0.002
     ) -> Transaction:
+        from wallet import multisig_address
+
         metadata = {
             'fee': fee,
             'senders': senders,
             'required_signatures': required_signatures,
-            'signatures': {}
+            'signatures': {},
+            'public_keys': {}
         }
-        
+
+        # The sender is the m-of-n address derived from the signer set and
+        # threshold — not a comma-joined string of names, which committed to
+        # nothing and could not be verified.
         return Transaction(
             tx_type=TransactionType.MULTI_SIG,
-            sender=','.join(senders),
+            sender=multisig_address(senders, required_signatures),
             recipient=recipient,
             amount=amount,
             timestamp=time.time(),
