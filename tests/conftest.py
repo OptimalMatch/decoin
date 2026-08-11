@@ -8,13 +8,15 @@ import os
 from datetime import datetime
 from typing import Generator
 
-# Add src directory to path
+# Add src and the tests dir (for signing_helpers) to the path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
+sys.path.insert(0, os.path.dirname(__file__))
 
 from blockchain import Blockchain, Block
 from transactions import Transaction, TransactionType, TransactionBuilder
 from consensus import ConsensusManager
 from node import DeCoinNode
+from wallet import Wallet
 
 
 @pytest.fixture(scope="session")
@@ -38,16 +40,24 @@ def transaction_builder():
 
 
 @pytest.fixture
-def sample_transaction():
-    """Create a sample transaction"""
-    return Transaction(
+def sample_wallet():
+    """A deterministic-per-test wallet used to sign sample transactions."""
+    return Wallet.generate()
+
+
+@pytest.fixture
+def sample_transaction(sample_wallet):
+    """A sample transaction, signed (signatures are required by default)."""
+    tx = Transaction(
         tx_type=TransactionType.STANDARD,
-        sender="alice",
-        recipient="bob",
+        sender=sample_wallet.address,
+        recipient="DECbob",
         amount=10.5,
         timestamp=datetime.now().timestamp(),
-        metadata={"note": "test payment"}
+        metadata={"note": "test payment", "fee": 0.001}
     )
+    tx.sign_with(sample_wallet)
+    return tx
 
 
 @pytest.fixture

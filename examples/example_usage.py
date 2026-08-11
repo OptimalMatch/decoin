@@ -7,7 +7,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 from blockchain import Blockchain, Transaction, TransactionType
 from transactions import TransactionBuilder
 from consensus import HybridConsensus
+from wallet import Wallet
 import time
+
+
+def signed_transfer(wallet, recipient, amount, fee=0.001):
+    """Build a standard transaction and sign it with the sender's key."""
+    tx = Transaction(
+        tx_type=TransactionType.STANDARD,
+        sender=wallet.address, recipient=recipient, amount=amount,
+        timestamp=time.time(), metadata={"fee": fee},
+    )
+    tx.sign_with(wallet)
+    return tx
 
 def demo_standard_transactions():
     print("=== Standard Transaction Demo ===")
@@ -144,20 +156,16 @@ def demo_mining():
     consensus.register_validator("validator3", 2000)
     
     builder = TransactionBuilder()
-    # Fund the senders first. A spend the sender cannot cover makes the whole
-    # block invalid, so the mint from "system" has to come before the transfers.
-    for i in range(10):
+    # Each user is a real wallet now (signatures are required). Fund them from
+    # "system" first — a spend the sender cannot cover invalidates the block.
+    users = [Wallet.generate() for _ in range(11)]
+    for w in users[:10]:
         blockchain.add_transaction(builder.create_standard_transaction(
-            sender="system", recipient=f"user{i}", amount=1000, fee=0
+            sender="system", recipient=w.address, amount=1000, fee=0
         ))
+    # Signed transfers between users.
     for i in range(10):
-        tx = builder.create_standard_transaction(
-            sender=f"user{i}",
-            recipient=f"user{i+1}",
-            amount=i * 10,
-            fee=0.001
-        )
-        blockchain.add_transaction(tx)
+        blockchain.add_transaction(signed_transfer(users[i], users[i + 1].address, i * 10))
 
     selected = consensus.select_validator()
     print(f"Selected validator: {selected}")
@@ -187,20 +195,15 @@ def demo_blockchain_validation():
     builder = TransactionBuilder()
     
     # Fund the senders once so every transfer below is covered.
-    for j in range(6):
+    users = [Wallet.generate() for _ in range(6)]
+    for w in users:
         blockchain.add_transaction(builder.create_standard_transaction(
-            sender="system", recipient=f"user{j}", amount=1000, fee=0
+            sender="system", recipient=w.address, amount=1000, fee=0
         ))
 
     for i in range(3):
         for j in range(5):
-            tx = builder.create_standard_transaction(
-                sender=f"user{j}",
-                recipient=f"user{j+1}",
-                amount=10,
-                fee=0.001
-            )
-            blockchain.add_transaction(tx)
+            blockchain.add_transaction(signed_transfer(users[j], users[j + 1].address, 10))
 
         block = blockchain.create_block(f"validator{i}")
         block.mine_block(blockchain.difficulty)

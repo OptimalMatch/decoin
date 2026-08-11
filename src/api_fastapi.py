@@ -9,6 +9,15 @@ import json
 from datetime import datetime
 
 from blockchain import Transaction as ChainTx, TransactionType as ChainTxType
+# The API schema and the chain use different enum spellings (e.g. "timelocked"
+# vs "time_locked"), so map explicitly when reconstructing a submitted tx.
+_SCHEMA_TO_CHAIN_TYPE = {
+    "standard": ChainTxType.STANDARD,
+    "multisig": ChainTxType.MULTI_SIG,
+    "timelocked": ChainTxType.TIME_LOCKED,
+    "data": ChainTxType.DATA_STORAGE,
+    "contract": ChainTxType.SMART_CONTRACT,
+}
 from schemas import (
     TransactionRequest, TransactionResponse,
     BlockResponse, NodeStatus, PeerInfo,
@@ -145,14 +154,23 @@ class DeCoinAPI:
                 # locally, so the server must reconstruct it EXACTLY (same
                 # timestamp and metadata) or the signature will not verify. We do
                 # not re-time or rebuild it through the builder.
-                if tx_request.signature and tx_request.public_key:
+                #
+                # When signatures are required, the API is a SUBMISSION endpoint,
+                # not a transaction factory: it reconstructs the client's fully
+                # formed transaction for every type (multisig carries its
+                # signatures in metadata, so the trigger cannot be a top-level
+                # signature) and lets add_transaction verify it.
+                if self.blockchain.require_signatures or (tx_request.signature and tx_request.public_key):
                     if tx_request.timestamp is None:
                         raise HTTPException(
                             status_code=400,
                             detail="A signed transaction must include its timestamp"
                         )
+                    chain_type = _SCHEMA_TO_CHAIN_TYPE.get(tx_request.transaction_type.value)
+                    if chain_type is None:
+                        raise HTTPException(status_code=400, detail="Invalid transaction type")
                     tx = ChainTx(
-                        tx_type=ChainTxType(tx_request.transaction_type.value),
+                        tx_type=chain_type,
                         sender=tx_request.sender,
                         recipient=tx_request.recipient,
                         amount=tx_request.amount,

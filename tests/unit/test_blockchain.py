@@ -61,13 +61,13 @@ class TestBlockchain:
         assert block.transactions[1] == sample_transaction
         assert block.validator == "test_validator"
     
-    def test_add_block(self, blockchain, sample_transaction):
+    def test_add_block(self, blockchain, sample_wallet, sample_transaction):
         """Test adding a valid block to the chain"""
-        # Fund alice first: her spend (sample_transaction) must be covered or the
-        # block is rejected. The mint comes from a system sender.
+        # Fund the sample wallet first: its spend (sample_transaction) must be
+        # covered or the block is rejected. The mint comes from a system sender.
         blockchain.add_transaction(Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="system", recipient="alice", amount=100, timestamp=time.time()
+            sender="system", recipient=sample_wallet.address, amount=100, timestamp=time.time()
         ))
         blockchain.add_transaction(sample_transaction)
         block = blockchain.create_block("test_validator")
@@ -118,40 +118,46 @@ class TestBlockchain:
     
     def test_get_balance(self, blockchain):
         """Test balance calculation"""
+        from wallet import Wallet
+        alice = Wallet.generate()
+
         # Initial balance should be 0
-        assert blockchain.get_balance("alice") == 0
-        assert blockchain.get_balance("bob") == 0
-        
-        # Add transactions
+        assert blockchain.get_balance(alice.address) == 0
+        assert blockchain.get_balance("DECbob") == 0
+
+        # Fund alice from the system minter (no signature required)
         tx1 = Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="genesis",
-            recipient="alice",
+            sender="system",
+            recipient=alice.address,
             amount=100,
             timestamp=time.time()
         )
         
+        # Alice sends 30 to bob, signed with her key
         tx2 = Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="alice",
-            recipient="bob",
+            sender=alice.address,
+            recipient="DECbob",
             amount=30,
-            timestamp=time.time()
+            timestamp=time.time(),
+            metadata={"fee": 0}
         )
-        
+        tx2.sign_with(alice)
+
         blockchain.add_transaction(tx1)
         blockchain.add_transaction(tx2)
-        
+
         # Create and add block
         block = blockchain.create_block("validator")
         while not block.calculate_hash().startswith("0" * blockchain.difficulty):
             block.nonce += 1
         block.block_hash = block.calculate_hash()
         blockchain.add_block(block)
-        
+
         # Check balances
-        assert blockchain.get_balance("alice") == 70  # 100 - 30
-        assert blockchain.get_balance("bob") == 30
+        assert blockchain.get_balance(alice.address) == 70  # 100 - 30
+        assert blockchain.get_balance("DECbob") == 30
     
     def test_get_latest_block(self, blockchain):
         """Test getting the latest block"""

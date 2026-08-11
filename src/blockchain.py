@@ -226,7 +226,7 @@ class Blockchain:
         # whose public key hashes to the sender address. DeCoin shipped with no
         # signatures at all; this is the switch that makes an address spendable
         # only by its key-holder.
-        self.require_signatures = False
+        self.require_signatures = True
         self.create_genesis_block()
     
     def create_genesis_block(self) -> None:
