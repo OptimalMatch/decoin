@@ -13,11 +13,13 @@ signature is valid for the stated public key, and that the public key hashes to
 the sender address. Only the holder of the private key can produce that pair.
 """
 import hashlib
-from typing import Optional
+import json
+from typing import List, Optional
 
 from ecdsa import SigningKey, VerifyingKey, SECP256k1, BadSignatureError
 
 ADDRESS_PREFIX = "DEC"
+MULTISIG_PREFIX = "DECMS"
 
 
 def address_from_public_key(public_key_bytes: bytes) -> str:
@@ -31,6 +33,18 @@ def address_from_public_key(public_key_bytes: bytes) -> str:
 
 def address_from_public_key_hex(public_key_hex: str) -> str:
     return address_from_public_key(bytes.fromhex(public_key_hex))
+
+
+def multisig_address(signer_addresses: List[str], required: int) -> str:
+    """An m-of-n address commits to WHO can sign and HOW MANY are needed, so the
+    address cannot be spent by a different set of signers or a lower threshold.
+    Order-independent (signers are sorted) so every party derives the same one."""
+    payload = json.dumps(
+        {"signers": sorted(signer_addresses), "required": int(required)},
+        sort_keys=True,
+    ).encode()
+    ripe = hashlib.new("ripemd160", hashlib.sha256(payload).digest()).hexdigest()
+    return MULTISIG_PREFIX + ripe
 
 
 def verify_signature(public_key_hex: str, signature_hex: str, message: bytes) -> bool:

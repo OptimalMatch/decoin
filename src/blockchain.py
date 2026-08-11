@@ -31,17 +31,24 @@ class Transaction:
         if not self.tx_hash:
             self.tx_hash = self.calculate_hash()
 
+    # Metadata keys that CARRY signatures rather than being signed content. They
+    # are excluded from signing_bytes so that attaching signatures (multisig)
+    # does not change the very bytes those signatures commit to.
+    _UNSIGNED_META_KEYS = ('signatures', 'public_keys')
+
     def signing_bytes(self) -> bytes:
         """The canonical content a signature commits to: everything that defines
         the transaction, but NOT the signature, public key, or tx_hash (which are
         derived from it). Signing and hashing cover exactly the same bytes."""
+        meta = {k: v for k, v in self.metadata.items()
+                if k not in self._UNSIGNED_META_KEYS}
         tx_data = {
             'type': self.tx_type.value,
             'sender': self.sender,
             'recipient': self.recipient,
             'amount': self.amount,
             'timestamp': self.timestamp,
-            'metadata': self.metadata
+            'metadata': meta
         }
         return json.dumps(tx_data, sort_keys=True).encode()
 
@@ -69,6 +76,51 @@ class Transaction:
         except (ValueError, TypeError):
             return False
         return verify_signature(self.public_key, self.signature, self.signing_bytes())
+
+    def is_authorized(self) -> bool:
+        """Whether this transaction is validly authorized by its owner(s):
+        m-of-n for a multisig transaction, a single signature for the rest."""
+        if self.tx_type == TransactionType.MULTI_SIG:
+            return self.is_multisig_valid()
+        return self.is_signature_valid()
+
+    def add_multisig_signature(self, wallet) -> None:
+        """One signer of an m-of-n transaction attaches their signature and key.
+        All signers sign the SAME signing_bytes (which excludes the signatures),
+        so signatures can be collected one at a time without changing the payload."""
+        self.metadata.setdefault('signatures', {})[wallet.address] = wallet.sign(self.signing_bytes())
+        self.metadata.setdefault('public_keys', {})[wallet.address] = wallet.public_key_hex
+
+    def is_multisig_valid(self) -> bool:
+        """True only if the sender address is the m-of-n address derived from the
+        declared signer set and threshold, AND at least `required_signatures` of
+        those signers have attached a valid signature. The old code merely counted
+        dict entries, so an empty-but-padded signatures map passed."""
+        from wallet import verify_signature, address_from_public_key_hex, multisig_address
+        md = self.metadata
+        signers = md.get('senders', [])
+        required = md.get('required_signatures', 0)
+        sigs = md.get('signatures', {})
+        pubs = md.get('public_keys', {})
+        if not signers or not isinstance(required, int) or required <= 0:
+            return False
+        # The address must commit to exactly this signer set and threshold.
+        if self.sender != multisig_address(signers, required):
+            return False
+        message = self.signing_bytes()
+        valid = 0
+        for addr in signers:
+            sig, pub = sigs.get(addr), pubs.get(addr)
+            if not sig or not pub:
+                continue
+            try:
+                if address_from_public_key_hex(pub) != addr:
+                    continue
+            except (ValueError, TypeError):
+                continue
+            if verify_signature(pub, sig, message):
+                valid += 1
+        return valid >= required
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -223,7 +275,7 @@ class Blockchain:
             return False
         if (self.require_signatures
                 and transaction.sender not in self.MINTERS
-                and not transaction.is_signature_valid()):
+                and not transaction.is_authorized()):
             return False
         return True
     
@@ -298,7 +350,7 @@ class Blockchain:
                 # The spender must own the address: a valid signature whose key
                 # hashes to the sender. Minters (genesis/coinbase/faucet) create
                 # coin and have no key, so they are exempt.
-                if self.require_signatures and not tx.is_signature_valid():
+                if self.require_signatures and not tx.is_authorized():
                     return False
                 if balances.get(tx.sender, 0) < tx.amount + fee:
                     return False
