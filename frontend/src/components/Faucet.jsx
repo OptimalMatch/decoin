@@ -3,6 +3,7 @@ import { useMutation } from 'react-query'
 import { FiDroplet, FiCheck, FiAlertCircle } from 'react-icons/fi'
 import toast from 'react-hot-toast'
 import axios from 'axios'
+import { Wallet } from '../services/wallet'
 
 function Faucet() {
   const [address, setAddress] = useState('')
@@ -39,8 +40,10 @@ function Faucet() {
   }
 
   const generateRandomAddress = () => {
-    const randomAddress = 'DEC' + Math.random().toString(36).substring(2, 15).toUpperCase()
-    setAddress(randomAddress)
+    // Real keypair; the address is the hash of a public key, not random text.
+    const wallet = Wallet.generate()
+    localStorage.setItem('decoin_private_key', wallet.privateKeyHex)
+    setAddress(wallet.address)
   }
 
   return (

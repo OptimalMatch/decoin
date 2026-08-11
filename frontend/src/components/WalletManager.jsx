@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { useQuery } from 'react-query'
 import { FiCreditCard, FiSend, FiDownload, FiCopy, FiCheck } from 'react-icons/fi'
 import { walletAPI, transactionAPI } from '../services/api'
+import { Wallet } from '../services/wallet'
 import toast from 'react-hot-toast'
 
 function WalletManager() {
@@ -41,10 +42,13 @@ function WalletManager() {
   }
 
   const generateNewWallet = () => {
-    // Generate a random wallet address for demo
-    const randomAddress = 'DEC' + Math.random().toString(36).substring(2, 15).toUpperCase()
-    setWalletAddress(randomAddress)
-    toast.success('New wallet generated!')
+    // A real secp256k1 keypair — the address is derived from the public key, not
+    // invented. The private key is kept in localStorage for this teaching wallet;
+    // a production wallet would encrypt it or use a hardware signer.
+    const wallet = Wallet.generate()
+    localStorage.setItem('decoin_private_key', wallet.privateKeyHex)
+    setWalletAddress(wallet.address)
+    toast.success('New wallet generated (real keypair)')
   }
 
   return (
