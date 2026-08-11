@@ -11,12 +11,13 @@ from wallet import Wallet
 import time
 
 
-def signed_transfer(wallet, recipient, amount, fee=0.001):
-    """Build a standard transaction and sign it with the sender's key."""
+def signed_transfer(wallet, recipient, amount, nonce=0, fee=0.001):
+    """Build a standard transaction and sign it with the sender's key. `nonce`
+    is the sender's per-transaction sequence number (replay protection)."""
     tx = Transaction(
         tx_type=TransactionType.STANDARD,
         sender=wallet.address, recipient=recipient, amount=amount,
-        timestamp=time.time(), metadata={"fee": fee},
+        timestamp=time.time(), nonce=nonce, metadata={"fee": fee},
     )
     tx.sign_with(wallet)
     return tx
@@ -203,7 +204,8 @@ def demo_blockchain_validation():
 
     for i in range(3):
         for j in range(5):
-            blockchain.add_transaction(signed_transfer(users[j], users[j + 1].address, 10))
+            # Each user sends once per round, so its nonce is the round index.
+            blockchain.add_transaction(signed_transfer(users[j], users[j + 1].address, 10, nonce=i))
 
         block = blockchain.create_block(f"validator{i}")
         block.mine_block(blockchain.difficulty)

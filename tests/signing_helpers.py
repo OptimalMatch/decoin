@@ -18,33 +18,36 @@ _CHAIN_TO_SCHEMA_TYPE = {
 }
 
 
-def signed_standard(wallet, recipient, amount, fee=0.001, metadata=None):
+def signed_standard(wallet, recipient, amount, fee=0.001, metadata=None, nonce=0):
     md = dict(metadata or {})
     md["fee"] = fee
     tx = Transaction(
         tx_type=TransactionType.STANDARD,
         sender=wallet.address, recipient=recipient, amount=float(amount),
-        timestamp=time.time(), metadata=md,
+        timestamp=time.time(), nonce=nonce, metadata=md,
     )
     tx.sign_with(wallet)
     return tx
 
 
-def signed_timelocked(wallet, recipient, amount, unlock_time, fee=0.001):
+def signed_timelocked(wallet, recipient, amount, unlock_time, fee=0.001, nonce=0):
     tx = Transaction(
         tx_type=TransactionType.TIME_LOCKED,
         sender=wallet.address, recipient=recipient, amount=float(amount),
-        timestamp=time.time(), metadata={"fee": fee, "unlock_time": unlock_time},
+        timestamp=time.time(), nonce=nonce,
+        metadata={"fee": fee, "unlock_time": unlock_time},
     )
     tx.sign_with(wallet)
     return tx
 
 
-def signed_multisig(wallets, recipient, amount, required, fee=0.002):
+def signed_multisig(wallets, recipient, amount, required, fee=0.002, nonce=0):
     tx = TransactionBuilder.create_multisig_transaction(
         senders=[w.address for w in wallets], recipient=recipient,
         amount=float(amount), required_signatures=required, fee=fee,
     )
+    tx.nonce = nonce
+    tx.tx_hash = tx.calculate_hash()  # nonce changed, refresh the stored hash
     for w in wallets[:required]:
         tx.add_multisig_signature(w)
     return tx
@@ -58,6 +61,7 @@ def request_body(tx):
         "amount": tx.amount,
         "transaction_type": _CHAIN_TO_SCHEMA_TYPE[tx.tx_type.value],
         "metadata": tx.metadata,
+        "nonce": tx.nonce,
         "timestamp": tx.timestamp,
         "signature": tx.signature,
         "public_key": tx.public_key,

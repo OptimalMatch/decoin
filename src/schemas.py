@@ -21,6 +21,7 @@ class TransactionRequest(BaseModel):
     amount: float = Field(..., gt=0, description="Amount to transfer")
     transaction_type: TransactionType = Field(default=TransactionType.STANDARD, description="Type of transaction")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional transaction metadata")
+    nonce: Optional[int] = Field(default=0, description="Per-sender sequence number for replay protection; must exceed the sender's highest confirmed nonce")
     timestamp: Optional[float] = Field(default=None, description="Client timestamp; required for a signed transaction so the server can reconstruct and verify the signed bytes")
     signature: Optional[str] = Field(default=None, description="Hex ECDSA signature over the transaction's canonical bytes")
     public_key: Optional[str] = Field(default=None, description="Hex secp256k1 public key of the sender; must hash to the sender address")

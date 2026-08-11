@@ -23,6 +23,10 @@ class Transaction:
     amount: float
     timestamp: float
     metadata: Dict[str, Any] = field(default_factory=dict)
+    # Per-sender sequence number for replay protection. A sender's transactions
+    # must carry strictly increasing nonces, so a captured signed transaction
+    # cannot be re-submitted (its nonce is already spent). Minters are exempt.
+    nonce: int = 0
     signature: Optional[str] = None
     public_key: Optional[str] = None
     tx_hash: Optional[str] = None
@@ -48,6 +52,7 @@ class Transaction:
             'recipient': self.recipient,
             'amount': self.amount,
             'timestamp': self.timestamp,
+            'nonce': self.nonce,
             'metadata': meta
         }
         return json.dumps(tx_data, sort_keys=True).encode()
@@ -130,6 +135,7 @@ class Transaction:
             'recipient': self.recipient,
             'amount': self.amount,
             'timestamp': self.timestamp,
+            'nonce': self.nonce,
             'metadata': self.metadata,
             'signature': self.signature,
             'public_key': self.public_key
@@ -277,8 +283,15 @@ class Blockchain:
                 and transaction.sender not in self.MINTERS
                 and not transaction.is_authorized()):
             return False
+        # Replay protection: refuse a nonce already spent on the confirmed chain,
+        # so a captured signed transaction cannot be re-submitted. (Ordering
+        # within a block of not-yet-confirmed nonces is settled at block
+        # validation.)
+        if (transaction.sender not in self.MINTERS
+                and transaction.nonce <= self._confirmed_nonces().get(transaction.sender, -1)):
+            return False
         return True
-    
+
     def create_block(self, validator: str, stake_weight: float = 0.7) -> Block:
         # Create coinbase transaction (mining reward)
         block_height = len(self.chain)
@@ -336,12 +349,25 @@ class Blockchain:
                 balances[tx.recipient] = balances.get(tx.recipient, 0) + tx.amount
         return balances
 
+    def _confirmed_nonces(self) -> Dict[str, int]:
+        """The highest nonce each sender has used in the committed chain. A new
+        transaction must exceed it, so a replayed transaction (same nonce) is
+        rejected."""
+        nonces: Dict[str, int] = {}
+        for blk in self.chain:
+            for tx in blk.transactions:
+                if tx.sender not in self.MINTERS:
+                    if tx.sender not in nonces or tx.nonce > nonces[tx.sender]:
+                        nonces[tx.sender] = tx.nonce
+        return nonces
+
     def _transactions_cover_their_spends(self, transactions: List[Transaction]) -> bool:
         """Validate a block's transactions IN ORDER against a running balance, so
         a transaction funded earlier in the same block is honoured — and a spend
         the sender cannot cover makes the whole block invalid. Order matters,
         which is exactly why this cannot be parallelised across transactions."""
         balances = self._confirmed_balances()
+        nonces = self._confirmed_nonces()
         for tx in transactions:
             if tx.amount < 0:
                 return False
@@ -352,6 +378,10 @@ class Blockchain:
                 # coin and have no key, so they are exempt.
                 if self.require_signatures and not tx.is_authorized():
                     return False
+                # Replay protection: strictly increasing nonce per sender.
+                if tx.nonce <= nonces.get(tx.sender, -1):
+                    return False
+                nonces[tx.sender] = tx.nonce
                 if balances.get(tx.sender, 0) < tx.amount + fee:
                     return False
                 balances[tx.sender] = balances.get(tx.sender, 0) - (tx.amount + fee)
