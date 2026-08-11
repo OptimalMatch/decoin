@@ -8,8 +8,9 @@ import time
 import json
 from datetime import datetime
 
+from blockchain import Transaction as ChainTx, TransactionType as ChainTxType
 from schemas import (
-    TransactionRequest, TransactionResponse, 
+    TransactionRequest, TransactionResponse,
     BlockResponse, NodeStatus, PeerInfo,
     ChainInfo, MiningRequest, WalletBalance,
     ContractDeployRequest, ContractCallRequest,
@@ -140,8 +141,28 @@ class DeCoinAPI:
         async def submit_transaction(tx_request: TransactionRequest):
             """Submit a new transaction to the network"""
             try:
+                # Client-signed path: the client built and signed the transaction
+                # locally, so the server must reconstruct it EXACTLY (same
+                # timestamp and metadata) or the signature will not verify. We do
+                # not re-time or rebuild it through the builder.
+                if tx_request.signature and tx_request.public_key:
+                    if tx_request.timestamp is None:
+                        raise HTTPException(
+                            status_code=400,
+                            detail="A signed transaction must include its timestamp"
+                        )
+                    tx = ChainTx(
+                        tx_type=ChainTxType(tx_request.transaction_type.value),
+                        sender=tx_request.sender,
+                        recipient=tx_request.recipient,
+                        amount=tx_request.amount,
+                        timestamp=tx_request.timestamp,
+                        metadata=tx_request.metadata or {},
+                        signature=tx_request.signature,
+                        public_key=tx_request.public_key,
+                    )
                 # Create transaction based on type
-                if tx_request.transaction_type == "standard":
+                elif tx_request.transaction_type == "standard":
                     tx = self.transaction_builder.create_standard_transaction(
                         sender=tx_request.sender,
                         recipient=tx_request.recipient,
@@ -348,12 +369,25 @@ class DeCoinAPI:
         @self.app.get("/mining/difficulty", response_model=Dict[str, Any], tags=["Mining"])
         async def get_mining_info():
             """Get current mining difficulty and statistics"""
+            # Next block reward, computed from the halving schedule rather than
+            # hardcoded at 50 (which was wrong after the first halving).
+            height = len(self.blockchain.chain)
+            halvings = height // 100000
+            next_reward = 50.0 / (2 ** halvings)
+
+            # Hashrate is not measured anywhere, so report an ESTIMATE derived
+            # from difficulty and target block time (expected hashes to find a
+            # block, per second), clearly labelled — not a fabricated 0.
+            expected_hashes = 16 ** self.blockchain.difficulty
+            hashrate_estimate = expected_hashes / max(self.blockchain.block_time, 1)
+
             return {
                 "difficulty": self.blockchain.difficulty,
                 "is_mining": self.node.is_mining,
                 "blocks_mined": sum(1 for b in self.blockchain.chain if getattr(b, 'validator', None) == getattr(self.node, 'validator_address', None)),
-                "hashrate": 0,  # TODO: Calculate hashrate
-                "next_reward": 50.0
+                "hashrate_estimate": hashrate_estimate,
+                "hashrate_measured": None,
+                "next_reward": next_reward
             }
         
         @self.app.post("/contract/deploy", response_model=SuccessResponse, tags=["Smart Contracts"])
