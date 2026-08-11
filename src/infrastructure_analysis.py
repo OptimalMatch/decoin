@@ -446,7 +446,7 @@ def main():
     print(report)
     
     # Save report
-    with open('/home/unidatum/src_bitcoin/decoin/INFRASTRUCTURE_SCALING.md', 'w') as f:
+    with open('INFRASTRUCTURE_SCALING.md', 'w') as f:
         f.write("# DeCoin Infrastructure Scaling Analysis\n\n")
         f.write("```\n")
         f.write(report)

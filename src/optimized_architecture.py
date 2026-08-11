@@ -504,7 +504,7 @@ def main():
     print(report)
     
     # Save report
-    with open('/home/unidatum/src_bitcoin/decoin/OPTIMIZED_ARCHITECTURE.md', 'w') as f:
+    with open('OPTIMIZED_ARCHITECTURE.md', 'w') as f:
         f.write("# DeCoin Ultra-Optimized Architecture\n\n")
         f.write("```\n")
         f.write(report)
