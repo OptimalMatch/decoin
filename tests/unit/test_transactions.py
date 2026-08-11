@@ -52,36 +52,42 @@ class TestTransaction:
     def test_transaction_validation(self):
         """Test transaction validation"""
         from blockchain import Blockchain
+        from wallet import Wallet
         blockchain = Blockchain()
-        
-        # Valid transaction
+        alice = Wallet.generate()
+
+        # Valid transaction (signed)
         tx = Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="alice",
-            recipient="bob",
+            sender=alice.address,
+            recipient="DECbob",
             amount=10,
-            timestamp=time.time()
+            timestamp=time.time(),
+            metadata={"fee": 0.001}
         )
+        tx.sign_with(alice)
         assert blockchain.validate_transaction(tx) == True
-        
-        # Invalid transaction (negative amount)
+
+        # Invalid transaction (negative amount) — rejected before the signature check
         invalid_tx = Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="alice",
-            recipient="bob",
+            sender=alice.address,
+            recipient="DECbob",
             amount=-10,
             timestamp=time.time()
         )
         assert blockchain.validate_transaction(invalid_tx) == False
-        
-        # Zero amount is allowed in our implementation (for contract creation, etc)
+
+        # Zero amount is allowed (contract creation, etc), still must be signed
         zero_tx = Transaction(
             tx_type=TransactionType.STANDARD,
-            sender="alice",
-            recipient="bob",
+            sender=alice.address,
+            recipient="DECbob",
             amount=0,
-            timestamp=time.time()
+            timestamp=time.time(),
+            metadata={"fee": 0.001}
         )
+        zero_tx.sign_with(alice)
         assert blockchain.validate_transaction(zero_tx) == True
     
     def test_transaction_to_dict(self):
@@ -285,21 +291,19 @@ class TestTransactionTypes:
     def test_transaction_type_validation(self):
         """Test transaction validation for different types"""
         from blockchain import Blockchain
+        from wallet import Wallet
+        from signing_helpers import signed_standard, signed_multisig, signed_timelocked
         blockchain = Blockchain()
-        builder = TransactionBuilder()
-        
-        # Standard transaction
-        std_tx = builder.create_standard_transaction("alice", "bob", 10)
+        alice, bob = Wallet.generate(), Wallet.generate()
+
+        # Standard transaction (signed)
+        std_tx = signed_standard(alice, "DECbob", 10)
         assert blockchain.validate_transaction(std_tx) == True
-        
-        # Multisig transaction
-        multi_tx = builder.create_multisig_transaction(
-            ["alice", "bob"], "charlie", 20, 2
-        )
+
+        # Multisig transaction (2-of-2, both signed)
+        multi_tx = signed_multisig([alice, bob], "DECcharlie", 20, required=2)
         assert blockchain.validate_transaction(multi_tx) == True
-        
-        # Time-locked transaction
-        time_tx = builder.create_time_locked_transaction(
-            "alice", "bob", 30, time.time() + 3600
-        )
+
+        # Time-locked transaction (signed)
+        time_tx = signed_timelocked(alice, "DECbob", 30, time.time() + 3600)
         assert blockchain.validate_transaction(time_tx) == True

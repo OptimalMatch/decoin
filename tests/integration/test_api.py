@@ -14,6 +14,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'src'))
 from api_fastapi import DeCoinAPI
 from node import DeCoinNode
 from transactions import TransactionType
+from wallet import Wallet
+from signing_helpers import signed_standard, signed_timelocked, signed_multisig, request_body
 
 
 @pytest.fixture
@@ -104,15 +106,9 @@ class TestAPIEndpoints:
     
     def test_submit_transaction(self, api_client):
         """Test submitting a new transaction"""
-        tx_data = {
-            "sender": "alice",
-            "recipient": "bob",
-            "amount": 10.5,
-            "transaction_type": "standard",
-            "metadata": {"note": "test payment"}
-        }
-        
-        response = api_client.post("/transaction", json=tx_data)
+        tx = signed_standard(Wallet.generate(), "DECbob", 10.5,
+                             metadata={"note": "test payment"})
+        response = api_client.post("/transaction", json=request_body(tx))
         assert response.status_code == 200
         
         data = response.json()
@@ -135,14 +131,9 @@ class TestAPIEndpoints:
     def test_get_mempool(self, api_client):
         """Test getting mempool transactions"""
         # Submit a transaction first
-        tx_data = {
-            "sender": "alice",
-            "recipient": "bob",
-            "amount": 5.0,
-            "transaction_type": "standard"
-        }
-        api_client.post("/transaction", json=tx_data)
-        
+        tx = signed_standard(Wallet.generate(), "DECbob", 5.0)
+        api_client.post("/transaction", json=request_body(tx))
+
         # Get mempool
         response = api_client.get("/mempool")
         assert response.status_code == 200
@@ -238,60 +229,34 @@ class TestTransactionTypes:
     
     def test_standard_transaction(self, api_client):
         """Test standard transaction submission"""
-        tx_data = {
-            "sender": "alice",
-            "recipient": "bob",
-            "amount": 25.0,
-            "transaction_type": "standard",
-            "metadata": {"note": "Standard payment", "fee": 0.01}
-        }
-        
-        response = api_client.post("/transaction", json=tx_data)
+        wallet = Wallet.generate()
+        tx = signed_standard(wallet, "DECbob", 25.0, fee=0.01,
+                             metadata={"note": "Standard payment"})
+        response = api_client.post("/transaction", json=request_body(tx))
         assert response.status_code == 200
-        
+
         # Check transaction in mempool
         mempool = api_client.get("/mempool").json()
-        tx = next((t for t in mempool if t["sender"] == "alice"), None)
-        assert tx is not None
-        assert tx["amount"] == 25.0
-        assert tx["transaction_type"] == "standard"
+        found = next((t for t in mempool if t["sender"] == wallet.address), None)
+        assert found is not None
+        assert found["amount"] == 25.0
+        assert found["transaction_type"] == "standard"
     
     def test_multisig_transaction(self, api_client):
         """Test multi-signature transaction"""
-        tx_data = {
-            "sender": "alice",  # Primary sender
-            "recipient": "dave",
-            "amount": 100.0,
-            "transaction_type": "multisig",
-            "metadata": {
-                "senders": ["alice", "bob", "charlie"],
-                "required_signatures": 2,
-                "fee": 0.02
-            }
-        }
-        
-        response = api_client.post("/transaction", json=tx_data)
+        a, b, c = Wallet.generate(), Wallet.generate(), Wallet.generate()
+        tx = signed_multisig([a, b, c], "DECdave", 100.0, required=2, fee=0.02)
+        response = api_client.post("/transaction", json=request_body(tx))
         assert response.status_code == 200
-        
+
         data = response.json()
         assert data["success"] == True
     
     def test_timelocked_transaction(self, api_client):
         """Test time-locked transaction"""
         unlock_time = int(time.time() + 3600)  # 1 hour from now
-        
-        tx_data = {
-            "sender": "alice",
-            "recipient": "bob",
-            "amount": 50.0,
-            "transaction_type": "timelocked",
-            "metadata": {
-                "unlock_time": unlock_time,
-                "fee": 0.015
-            }
-        }
-        
-        response = api_client.post("/transaction", json=tx_data)
+        tx = signed_timelocked(Wallet.generate(), "DECbob", 50.0, unlock_time, fee=0.015)
+        response = api_client.post("/transaction", json=request_body(tx))
         assert response.status_code == 200
         
         data = response.json()
@@ -372,15 +337,10 @@ class TestConcurrentRequests:
     def test_concurrent_transactions(self, api_client):
         """Test submitting multiple transactions concurrently"""
         transactions = []
-        
+
         for i in range(10):
-            tx_data = {
-                "sender": f"user{i}",
-                "recipient": "bob",
-                "amount": i + 1,
-                "transaction_type": "standard"
-            }
-            response = api_client.post("/transaction", json=tx_data)
+            tx = signed_standard(Wallet.generate(), "DECbob", float(i + 1))
+            response = api_client.post("/transaction", json=request_body(tx))
             assert response.status_code == 200
             transactions.append(response.json()["data"]["transaction_id"])
         
