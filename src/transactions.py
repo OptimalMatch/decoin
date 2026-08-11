@@ -59,7 +59,7 @@ class TransactionBuilder:
         sender: str,
         recipient: str,
         amount: float,
-        fee: float = 0.001,
+        fee: int = 0,
         metadata: Optional[Dict] = None
     ) -> Transaction:
         tx_metadata = metadata or {}
@@ -80,7 +80,7 @@ class TransactionBuilder:
         recipient: str,
         amount: float,
         required_signatures: int,
-        fee: float = 0.002
+        fee: int = 0
     ) -> Transaction:
         from wallet import multisig_address
 
@@ -110,7 +110,7 @@ class TransactionBuilder:
         recipient: str,
         amount: float,
         unlock_time: float,
-        fee: float = 0.001
+        fee: int = 0
     ) -> Transaction:
         metadata = {
             'fee': fee,
@@ -135,7 +135,7 @@ class TransactionBuilder:
         amount_b: float,
         secret_hash: str,
         timeout: int = 3600,
-        fee: float = 0.003
+        fee: int = 0
     ) -> Transaction:
         metadata = {
             'fee': fee,
@@ -161,7 +161,7 @@ class TransactionBuilder:
     def create_data_storage_transaction(
         sender: str,
         data: Dict[str, Any],
-        fee: float = 0.005
+        fee: int = 0
     ) -> Transaction:
         data_hash = hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
         
@@ -187,7 +187,7 @@ class TransactionBuilder:
         contract_code: str,
         initial_state: Dict[str, Any],
         initial_balance: float = 0,
-        fee: float = 0.01
+        fee: int = 0
     ) -> Transaction:
         contract_id = hashlib.sha256(
             (contract_code + json.dumps(initial_state) + str(time.time())).encode()

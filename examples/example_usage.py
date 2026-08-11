@@ -11,13 +11,13 @@ from wallet import Wallet
 import time
 
 
-def signed_transfer(wallet, recipient, amount, nonce=0, fee=0.001):
-    """Build a standard transaction and sign it with the sender's key. `nonce`
-    is the sender's per-transaction sequence number (replay protection)."""
+def signed_transfer(wallet, recipient, amount, nonce=0, fee=0):
+    """Build a standard transaction and sign it with the sender's key. Amount and
+    fee are integer base units; `nonce` is the sender's sequence number."""
     tx = Transaction(
         tx_type=TransactionType.STANDARD,
-        sender=wallet.address, recipient=recipient, amount=amount,
-        timestamp=time.time(), nonce=nonce, metadata={"fee": fee},
+        sender=wallet.address, recipient=recipient, amount=int(amount),
+        timestamp=time.time(), nonce=nonce, metadata={"fee": int(fee)},
     )
     tx.sign_with(wallet)
     return tx

@@ -18,7 +18,7 @@ class TransactionType(str, Enum):
 class TransactionRequest(BaseModel):
     sender: str = Field(..., description="Address of the sender")
     recipient: str = Field(..., description="Address of the recipient")
-    amount: float = Field(..., gt=0, description="Amount to transfer")
+    amount: int = Field(..., gt=0, description="Amount in integer base units")
     transaction_type: TransactionType = Field(default=TransactionType.STANDARD, description="Type of transaction")
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Additional transaction metadata")
     nonce: Optional[int] = Field(default=0, description="Per-sender sequence number for replay protection; must exceed the sender's highest confirmed nonce")
@@ -42,7 +42,7 @@ class TransactionResponse(BaseModel):
     transaction_id: str = Field(..., description="Unique transaction identifier")
     sender: str
     recipient: str
-    amount: float
+    amount: int
     timestamp: datetime
     transaction_type: str
     metadata: Optional[Dict[str, Any]] = None

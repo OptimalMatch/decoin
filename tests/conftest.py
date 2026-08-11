@@ -52,9 +52,9 @@ def sample_transaction(sample_wallet):
         tx_type=TransactionType.STANDARD,
         sender=sample_wallet.address,
         recipient="DECbob",
-        amount=10.5,
+        amount=10,  # integer base units
         timestamp=datetime.now().timestamp(),
-        metadata={"note": "test payment", "fee": 0.001}
+        metadata={"note": "test payment", "fee": 0}
     )
     tx.sign_with(sample_wallet)
     return tx

@@ -13,7 +13,7 @@ from transactions import TransactionBuilder
 from wallet import Wallet, multisig_address
 
 
-def _ms(signers, required=2, recipient="DECdave", amount=10.0, fee=0.002):
+def _ms(signers, required=2, recipient="DECdave", amount=10, fee=0):
     return TransactionBuilder.create_multisig_transaction(
         senders=signers, recipient=recipient, amount=amount,
         required_signatures=required, fee=fee,
@@ -69,7 +69,7 @@ class TestMultisig:
             sender="system", recipient=ms_addr, amount=100, timestamp=time.time()
         ))
 
-        tx = _ms(signers, required=2, amount=10.0, fee=0.0)
+        tx = _ms(signers, required=2, amount=10, fee=0)
         tx.add_multisig_signature(a)
         tx.add_multisig_signature(b)
         assert bc.add_transaction(tx) is True
