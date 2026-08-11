@@ -251,7 +251,7 @@ def main():
     print(report)
     
     # Save report
-    with open('/home/unidatum/src_bitcoin/decoin/ENERGY_ANALYSIS.md', 'w') as f:
+    with open('ENERGY_ANALYSIS.md', 'w') as f:
         f.write("# DeCoin Energy Analysis\n\n")
         f.write("```\n")
         f.write(report)

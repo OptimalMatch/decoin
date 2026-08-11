@@ -1,7 +1,7 @@
 """
 FastAPI-based REST API with OpenAPI/Swagger support
 """
-from fastapi import FastAPI, HTTPException, Path, Query, Body, Depends
+from fastapi import FastAPI, HTTPException, Path, Query
 from fastapi.middleware.cors import CORSMiddleware
 from typing import Optional, List, Dict, Any
 import time
@@ -68,7 +68,10 @@ class DeCoinAPI:
         
         # Register routes
         self._register_routes()
-    
+        # Wire in the monitoring endpoints. The function existed but was never
+        # called, so /monitoring/* was unreachable dead code; now it is served.
+        add_monitoring_endpoints(self.app, self.blockchain, self.node)
+
     def _register_routes(self):
         """Register all API routes"""
         

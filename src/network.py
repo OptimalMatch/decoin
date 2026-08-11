@@ -3,7 +3,7 @@ import json
 import hashlib
 import time
 from typing import Dict, List, Set, Optional, Any
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from enum import Enum
 import websockets
 from blockchain import Block, Transaction, Blockchain
