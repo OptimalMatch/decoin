@@ -53,7 +53,7 @@ def verify_signature(public_key_hex: str, signature_hex: str, message: bytes) ->
     exception the caller has to guard."""
     try:
         vk = VerifyingKey.from_string(bytes.fromhex(public_key_hex), curve=SECP256k1)
-        return vk.verify(bytes.fromhex(signature_hex), message)
+        return vk.verify(bytes.fromhex(signature_hex), message, hashfunc=hashlib.sha256)
     except (BadSignatureError, ValueError, TypeError):
         return False
 
@@ -89,5 +89,8 @@ class Wallet:
 
     def sign(self, message: bytes) -> str:
         """Sign the canonical bytes of a transaction (see Transaction.signing_bytes)
-        and return the signature as hex."""
-        return self._signing_key.sign(message).hex()
+        and return the signature as hex. Deterministic (RFC 6979) over SHA-256 —
+        strong (the library's bare sign() defaults to SHA-1) and reproducible, so
+        an independent implementation (e.g. the browser wallet) that follows the
+        same rule produces a byte-identical signature."""
+        return self._signing_key.sign_deterministic(message, hashfunc=hashlib.sha256).hex()

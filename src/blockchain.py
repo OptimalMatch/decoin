@@ -68,7 +68,12 @@ class Transaction:
             'sender': self.sender,
             'recipient': self.recipient,
             'amount': self.amount,
-            'timestamp': self.timestamp,
+            # The timestamp is signed as an INTEGER (whole seconds). A float here
+            # is not cross-language safe: Python's json.dumps writes 1700000000.0
+            # but JavaScript's JSON.stringify writes 1700000000, so a browser
+            # wallet and the node would sign different bytes. Every signed field
+            # is now an int or a string, which both languages encode identically.
+            'timestamp': int(self.timestamp),
             'nonce': self.nonce,
             'metadata': meta
         }
